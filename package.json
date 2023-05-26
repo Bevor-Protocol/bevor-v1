@@ -6,6 +6,9 @@
   "author": "Blake Hatch <blakewihatch@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@chainlink/contracts": "^0.6.1",
+    "@opengsn/contracts": "^3.0.0-beta.6",
+    "@openzeppelin/contracts": "^4.9.0",
     "truffle": "^5.9.2"
   }
 }
