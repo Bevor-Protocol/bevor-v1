@@ -1,0 +1,11 @@
+{
+  "name": "Bevor-Contracts",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Bevor-Protocol/Bevor-Contracts.git",
+  "author": "Blake Hatch <blakewihatch@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "truffle": "^5.9.2"
+  }
+}
