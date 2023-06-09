@@ -37,6 +37,8 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         bool auditInvalidated;
         // address of the ERC20 token vesting
         ERC20 _token;
+        // address of the ERC721 audit NFT
+        uint256 _tokenId;
     }
 
     bytes32[] private vestingSchedulesIds;
@@ -49,8 +51,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      * @dev Reverts if the vesting schedule does not exist or has been revoked.
      */
     modifier onlyIfVestingScheduleNotRevoked(bytes32 vestingScheduleId) {
-        require(vestingSchedules[vestingScheduleId].initialized);
-        require(!vestingSchedules[vestingScheduleId].revoked);
+        require(!vestingSchedules[vestingScheduleId].auditInvalidated);
         _;
     }
 
@@ -58,10 +59,10 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
      */
-    constructor(address dao_, IAudit audit_) Ownable(msg.sender) {
+    constructor(address dao_, IAudit audit_) {
         // Check that the token address is not 0x0.
         require(dao_ != address(0x0));
-        require(audit_ != address(0x0));
+        require(address(audit_) != address(0x0));
         dao = dao_;
         audit = audit_;
     }
@@ -80,14 +81,12 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     /**
      * @notice Creates a new vesting schedule for a beneficiary.
      * @param _auditor address of the beneficiary to whom vested tokens are transferred
-     * @param _auditee address of the beneficiary to whom vested tokens are transferred
      * @param _start start time of the vesting period
      * @param _cliff duration in seconds of the cliff in which tokens will begin to vest
      * @param _duration duration in seconds of the period in which the tokens will vest
      */
     function createVestingSchedule(
         address _auditor,
-        address _auditee,
         uint256 _start,
         uint256 _cliff,
         uint256 _duration,
@@ -96,10 +95,13 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 _amount,
         uint256 _auditTokenId,
         bool _auditInvalidated,
-        address _token
+        ERC20 _token,
+        uint256 _tokenId
     ) external onlyOwner {
+        _token.transferFrom(msg.sender, address(this), _amount);
+
         require(
-            getWithdrawableAmount() >= _amount,
+            _token.balanceOf(address(this)) >= _amount,
             "TokenVesting: cannot create vesting schedule because not sufficient tokens"
         );
         require(_duration > 0, "TokenVesting: duration must be > 0");
@@ -116,7 +118,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
 
         vestingSchedules[vestingScheduleId] = VestingSchedule(
             _auditor,
-            _auditee,
+            msg.sender,
             cliff,
             _start,
             _duration,
@@ -126,76 +128,66 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             0,
             0,
             false,
-            _token
+            _token,
+            _tokenId
         );
         vestingSchedulesIds.push(vestingScheduleId);
         uint256 currentVestingCount = holdersVestingCount[_auditor];
         holdersVestingCount[_auditor] = currentVestingCount + 1;
 
         // Revert if audit nft does not exist
-        revert(audit.exists(_auditTokenId), "Audit NFT does not exist");
+        require(audit.ownerOf(_tokenId) == msg.sender, "Audit NFT is not owned by caller");
 
         // Reveal audit metadata once payment starts
-        audit.trustlessHandoff(_auditee, _auditTokenId);
+        audit.trustlessHandoff(msg.sender, _auditTokenId);
     }
 
     /**
      * @notice Revokes the vesting schedule for given identifier.
      * @param vestingScheduleId the vesting schedule identifier
      */
-    function invalidatAudit(
+    function invalidateAudit(
         bytes32 vestingScheduleId
     ) external onlyOwner onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
-        require(
-            vestingSchedule.revocable,
-            "TokenVesting: vesting is not revocable"
-        );
+
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         if (vestedAmount > 0) {
-            release(vestingScheduleId, vestedAmount);
+            vestingSchedule.released += vestedAmount;
+            vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditor, vestedAmount);
         }
         uint256 unreleased = vestingSchedule.amountTotal -
             vestingSchedule.released;
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - unreleased;
-        vestingSchedule.revoked = true;
 
-        returnTotalAmount = vestingSchedulesTotalAmount - amount;
-        safeTransfer(vestingSchedule._token, beneficiaryPayable, amount);
+        vestingSchedule.auditInvalidated = true;
+
+        uint256 returnTotalAmount = vestingSchedule.amountTotal - vestingSchedule.released;
+        vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditee, returnTotalAmount);
     }
 
     /**
      * @notice Release vested amount of tokens.
      * @param vestingScheduleId the vesting schedule identifier
-     * @param amount the amount to release
      */
     function withdraw(
-        bytes32 vestingScheduleId,
-        uint256 amount
+        bytes32 vestingScheduleId
     ) public nonReentrant onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
-        bool isBeneficiary = msg.sender == vestingSchedule.beneficiary;
+        bool isBeneficiary = msg.sender == vestingSchedule.auditor;
 
-        bool isReleasor = (msg.sender == owner);
+        bool isReleasor = (msg.sender == owner());
         require(
             isBeneficiary || isReleasor,
             "TokenVesting: only beneficiary and owner can release vested tokens"
         );
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        require(
-            vestedAmount >= amount,
-            "TokenVesting: cannot release tokens, not enough vested tokens"
-        );
-        vestingSchedule.released = vestingSchedule.released + amount;
-        address payable beneficiaryPayable = payable(
-            vestingSchedule.beneficiary
-        );
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - amount;
-        safeTransfer(vestingSchedule._token, beneficiaryPayable, amount);
+        vestingSchedule.released += vestedAmount;
+
+        vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditor, vestedAmount);
     }
 
     /**
@@ -320,7 +312,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // Retrieve the current time.
         uint256 currentTime = getCurrentTime();
         // If the current time is before the cliff, no tokens are releasable.
-        if ((currentTime < vestingSchedule.cliff) || vestingSchedule.revoked) {
+        if ((currentTime < vestingSchedule.cliff) || vestingSchedule.auditInvalidated) {
             return 0;
         }
         // If the current time is after the vesting period, all tokens are releasable,
