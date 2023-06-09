@@ -68,6 +68,11 @@ contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
         }
     }
 
+    function trustlessHandoff(address _to, uint256 _tokenId) public {
+        auditRevealed[_tokenId] = true;
+        transferFrom(_msgSender(), _to, _tokenId);
+    }
+
     /**
      * @dev Generates a Proof Of Integrity as the keccak256 hash of a human readable {base} and a randomly pre-generated number {salt}.
      */
