@@ -26,6 +26,10 @@ const BevorDAO = artifacts.require("BevorDAO");
 const TimelockController = artifacts.require("TimelockController");
 
 contract('Testing ERC721 contract', function(accounts) {
+    let tc;
+    let dao;
+    let nft;
+    let ap;
 
     let bvr;
     const name = "Bevor Token";
@@ -48,9 +52,12 @@ contract('Testing ERC721 contract', function(accounts) {
     const tokenAlloc3 = 200000;
 
     beforeEach(async () => {
-        bvr = await ERC20Token.new();
-        tusd = await ERC20Token.new();
-        
+        bvr = await ERC20Token.new(1000000, name, symbol);
+        tusd = await ERC20Token.new(1000000, name1, symbol1);
+        tc = await TimelockController.new(1, [account2], [account1], account);
+        dao = await BevorDAO.new(); 
+        nft = await Audit.new();
+        ap = await AuditPayment.new();
     });
 
     it(' should be able to deploy and create audit payment', async () => {
