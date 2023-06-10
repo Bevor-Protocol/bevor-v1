@@ -41,9 +41,9 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 _tokenId;
     }
 
-    bytes32[] private vestingSchedulesIds;
-    mapping(bytes32 => VestingSchedule) private vestingSchedules;
-    mapping(address => uint256) private holdersVestingCount;
+    bytes32[] public vestingSchedulesIds;
+    mapping(bytes32 => VestingSchedule) public vestingSchedules;
+    mapping(address => uint256) public holdersVestingCount;
     IAudit public audit;
     address public dao;
 
@@ -91,10 +91,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 _cliff,
         uint256 _duration,
         uint256 _slicePeriodSeconds,
-        bool _withdrawlPaused,
         uint256 _amount,
-        uint256 _auditTokenId,
-        bool _auditInvalidated,
         ERC20 _token,
         uint256 _tokenId
     ) external onlyOwner {
@@ -139,7 +136,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         require(audit.ownerOf(_tokenId) == msg.sender, "Audit NFT is not owned by caller");
 
         // Reveal audit metadata once payment starts
-        audit.trustlessHandoff(msg.sender, _auditTokenId);
+        audit.trustlessHandoff(msg.sender, _tokenId);
     }
 
     /**

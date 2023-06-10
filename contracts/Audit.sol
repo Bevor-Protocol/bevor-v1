@@ -14,6 +14,7 @@ contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
     address[] internal _test;
     string public baseURI = "";
     uint256 public maxTokensPerWallet = 100;
+    uint256 _tokenId = 0;
 
     mapping(uint256 => bool) public auditRevealed;
 
@@ -26,6 +27,11 @@ contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
 
     function _msgData() internal view override(Context, ERC2771Recipient) returns (bytes calldata) {
         return ERC2771Recipient._msgData();
+    }
+
+    function mint(address _to) public onlyOwner() {
+        _tokenId += 1;
+        _mint(_to, _tokenId);
     }
 
     function _beforeTokenTransfer(
