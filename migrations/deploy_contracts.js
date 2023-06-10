@@ -19,10 +19,10 @@ module.exports = async function(deployer) {
   let payAddr;
   let timelockAddr;
 
-  await deployer.deploy(BevorToken, 1000000, name, symbol).then(c => bvrAddr = c.address);
-  await deployer.deploy(BevorToken, 1000000, name1, symbol1).then(c => usdAddr = c.address);
+  await deployer.deploy(ERC20Token, 1000000, name, symbol).then(c => bvrAddr = c.address);
+  await deployer.deploy(ERC20Token, 1000000, name1, symbol1).then(c => usdAddr = c.address);
   await deployer.deploy(Audit).then(c => nftAddr = c.address);
-  await deployer.deploy(TimelockController).then(c => timelockAddr = c.address);
-  await deployer.deploy(BevorDAO, tokenAddr, timelockAddr).then(c => daoAddr = c.address);
-  await deployer.deploy(AuditPayment, nftAddr, forwarderAddress).then(c => payAddr = c.address);
+  await deployer.deploy(TimelockController, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19").then(c => timelockAddr = c.address);
+  await deployer.deploy(BevorDAO, bvrAddr, timelockAddr).then(c => daoAddr = c.address);
+  await deployer.deploy(AuditPayment, daoAddr, nftAddr).then(c => payAddr = c.address);
 };

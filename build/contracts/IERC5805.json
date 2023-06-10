@@ -1,0 +1,384 @@
+{
+  "contractName": "IERC5805",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "delegator",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "fromDelegate",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "toDelegate",
+          "type": "address"
+        }
+      ],
+      "name": "DelegateChanged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "delegate",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "previousBalance",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "newBalance",
+          "type": "uint256"
+        }
+      ],
+      "name": "DelegateVotesChanged",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "CLOCK_MODE",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "clock",
+      "outputs": [
+        {
+          "internalType": "uint48",
+          "name": "",
+          "type": "uint48"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "delegatee",
+          "type": "address"
+        }
+      ],
+      "name": "delegate",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "delegatee",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "nonce",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "expiry",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "name": "delegateBySig",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "delegates",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "timepoint",
+          "type": "uint256"
+        }
+      ],
+      "name": "getPastTotalSupply",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timepoint",
+          "type": "uint256"
+        }
+      ],
+      "name": "getPastVotes",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "getVotes",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "metadata": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"delegator\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"fromDelegate\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"toDelegate\",\"type\":\"address\"}],\"name\":\"DelegateChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"delegate\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"previousBalance\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"newBalance\",\"type\":\"uint256\"}],\"name\":\"DelegateVotesChanged\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"CLOCK_MODE\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"clock\",\"outputs\":[{\"internalType\":\"uint48\",\"name\":\"\",\"type\":\"uint48\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"delegatee\",\"type\":\"address\"}],\"name\":\"delegate\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"delegatee\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"expiry\",\"type\":\"uint256\"},{\"internalType\":\"uint8\",\"name\":\"v\",\"type\":\"uint8\"},{\"internalType\":\"bytes32\",\"name\":\"r\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"s\",\"type\":\"bytes32\"}],\"name\":\"delegateBySig\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"delegates\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"timepoint\",\"type\":\"uint256\"}],\"name\":\"getPastTotalSupply\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"timepoint\",\"type\":\"uint256\"}],\"name\":\"getPastVotes\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"getVotes\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"events\":{\"DelegateChanged(address,address,address)\":{\"details\":\"Emitted when an account changes their delegate.\"},\"DelegateVotesChanged(address,uint256,uint256)\":{\"details\":\"Emitted when a token transfer or delegate change results in changes to a delegate's number of votes.\"}},\"kind\":\"dev\",\"methods\":{\"CLOCK_MODE()\":{\"details\":\"Description of the clock\"},\"clock()\":{\"details\":\"Clock used for flagging checkpoints. Can be overridden to implement timestamp based checkpoints (and voting).\"},\"delegate(address)\":{\"details\":\"Delegates votes from the sender to `delegatee`.\"},\"delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)\":{\"details\":\"Delegates votes from signer to `delegatee`.\"},\"delegates(address)\":{\"details\":\"Returns the delegate that `account` has chosen.\"},\"getPastTotalSupply(uint256)\":{\"details\":\"Returns the total supply of votes available at a specific moment in the past. If the `clock()` is configured to use block numbers, this will return the value at the end of the corresponding block. NOTE: This value is the sum of all available votes, which is not necessarily the sum of all delegated votes. Votes that have not been delegated are still part of total supply, even though they would not participate in a vote.\"},\"getPastVotes(address,uint256)\":{\"details\":\"Returns the amount of votes that `account` had at a specific moment in the past. If the `clock()` is configured to use block numbers, this will return the value at the end of the corresponding block.\"},\"getVotes(address)\":{\"details\":\"Returns the current amount of votes that `account` has.\"}},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"@openzeppelin/contracts/interfaces/IERC5805.sol\":\"IERC5805\"},\"evmVersion\":\"shanghai\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[],\"viaIR\":true},\"sources\":{\"@openzeppelin/contracts/governance/utils/IVotes.sol\":{\"keccak256\":\"0x1618ddebe73377660f6da71afcba35d5ac4c4600918b3a381d9c6f37eba613eb\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://666c8d7c62478b55e082f1835275b7acfc1595491998df6d67183ff2c70eab96\",\"dweb:/ipfs/QmVXmnXfxNaLhoX283dqyKJ8DJbF5thUd9sMuRoFpNMwr7\"]},\"@openzeppelin/contracts/interfaces/IERC5805.sol\":{\"keccak256\":\"0xfc12b717f6a2cd0d67adc8700097d4464d37f18ce933d4fc9c948ab6aec35e80\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://82386e69ebe902a2edfd4f8a5ecbeaeb2e00f6cc6481a973729e974373fb492e\",\"dweb:/ipfs/QmSXg4wBMBd83mQvkekT1GsiRX2Qyv5gvrqzv5qJx2M7Kc\"]},\"@openzeppelin/contracts/interfaces/IERC6372.sol\":{\"keccak256\":\"0xcaea9aeda3816ba872358c828f4f01455c22ae48ced49c4c7d72bd74176c09b9\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://16ff22d8df5aee94510ee43d361b6147caef164941a684cedcb75be44f351fe6\",\"dweb:/ipfs/QmaCCwMdHVdPApuEJHLZapSJyA7mp5dAugpma3VUzWGd8E\"]}},\"version\":1}",
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "immutableReferences": {},
+  "generatedSources": [],
+  "deployedGeneratedSources": [],
+  "sourceMap": "",
+  "deployedSourceMap": "",
+  "source": "// SPDX-License-Identifier: MIT\n// OpenZeppelin Contracts (last updated v4.9.0) (interfaces/IERC5805.sol)\n\npragma solidity ^0.8.0;\n\nimport \"../governance/utils/IVotes.sol\";\nimport \"./IERC6372.sol\";\n\ninterface IERC5805 is IERC6372, IVotes {}\n",
+  "sourcePath": "@openzeppelin/contracts/interfaces/IERC5805.sol",
+  "ast": {
+    "absolutePath": "@openzeppelin/contracts/interfaces/IERC5805.sol",
+    "exportedSymbols": {
+      "IERC5805": [
+        4621
+      ],
+      "IERC6372": [
+        4636
+      ],
+      "IVotes": [
+        4584
+      ]
+    },
+    "id": 4622,
+    "license": "MIT",
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 4614,
+        "literals": [
+          "solidity",
+          "^",
+          "0.8",
+          ".0"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "107:23:18"
+      },
+      {
+        "absolutePath": "@openzeppelin/contracts/governance/utils/IVotes.sol",
+        "file": "../governance/utils/IVotes.sol",
+        "id": 4615,
+        "nameLocation": "-1:-1:-1",
+        "nodeType": "ImportDirective",
+        "scope": 4622,
+        "sourceUnit": 4585,
+        "src": "132:40:18",
+        "symbolAliases": [],
+        "unitAlias": ""
+      },
+      {
+        "absolutePath": "@openzeppelin/contracts/interfaces/IERC6372.sol",
+        "file": "./IERC6372.sol",
+        "id": 4616,
+        "nameLocation": "-1:-1:-1",
+        "nodeType": "ImportDirective",
+        "scope": 4622,
+        "sourceUnit": 4637,
+        "src": "173:24:18",
+        "symbolAliases": [],
+        "unitAlias": ""
+      },
+      {
+        "abstract": false,
+        "baseContracts": [
+          {
+            "baseName": {
+              "id": 4617,
+              "name": "IERC6372",
+              "nameLocations": [
+                "221:8:18"
+              ],
+              "nodeType": "IdentifierPath",
+              "referencedDeclaration": 4636,
+              "src": "221:8:18"
+            },
+            "id": 4618,
+            "nodeType": "InheritanceSpecifier",
+            "src": "221:8:18"
+          },
+          {
+            "baseName": {
+              "id": 4619,
+              "name": "IVotes",
+              "nameLocations": [
+                "231:6:18"
+              ],
+              "nodeType": "IdentifierPath",
+              "referencedDeclaration": 4584,
+              "src": "231:6:18"
+            },
+            "id": 4620,
+            "nodeType": "InheritanceSpecifier",
+            "src": "231:6:18"
+          }
+        ],
+        "canonicalName": "IERC5805",
+        "contractDependencies": [],
+        "contractKind": "interface",
+        "fullyImplemented": false,
+        "id": 4621,
+        "linearizedBaseContracts": [
+          4621,
+          4584,
+          4636
+        ],
+        "name": "IERC5805",
+        "nameLocation": "209:8:18",
+        "nodeType": "ContractDefinition",
+        "nodes": [],
+        "scope": 4622,
+        "src": "199:41:18",
+        "usedErrors": [],
+        "usedEvents": [
+          4518,
+          4527
+        ]
+      }
+    ],
+    "src": "107:134:18"
+  },
+  "compiler": {
+    "name": "solc",
+    "version": "0.8.20+commit.a1b79de6.Emscripten.clang"
+  },
+  "networks": {},
+  "schemaVersion": "3.4.14",
+  "updatedAt": "2023-06-10T03:47:55.526Z",
+  "devdoc": {
+    "events": {
+      "DelegateChanged(address,address,address)": {
+        "details": "Emitted when an account changes their delegate."
+      },
+      "DelegateVotesChanged(address,uint256,uint256)": {
+        "details": "Emitted when a token transfer or delegate change results in changes to a delegate's number of votes."
+      }
+    },
+    "kind": "dev",
+    "methods": {
+      "CLOCK_MODE()": {
+        "details": "Description of the clock"
+      },
+      "clock()": {
+        "details": "Clock used for flagging checkpoints. Can be overridden to implement timestamp based checkpoints (and voting)."
+      },
+      "delegate(address)": {
+        "details": "Delegates votes from the sender to `delegatee`."
+      },
+      "delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)": {
+        "details": "Delegates votes from signer to `delegatee`."
+      },
+      "delegates(address)": {
+        "details": "Returns the delegate that `account` has chosen."
+      },
+      "getPastTotalSupply(uint256)": {
+        "details": "Returns the total supply of votes available at a specific moment in the past. If the `clock()` is configured to use block numbers, this will return the value at the end of the corresponding block. NOTE: This value is the sum of all available votes, which is not necessarily the sum of all delegated votes. Votes that have not been delegated are still part of total supply, even though they would not participate in a vote."
+      },
+      "getPastVotes(address,uint256)": {
+        "details": "Returns the amount of votes that `account` had at a specific moment in the past. If the `clock()` is configured to use block numbers, this will return the value at the end of the corresponding block."
+      },
+      "getVotes(address)": {
+        "details": "Returns the current amount of votes that `account` has."
+      }
+    },
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  }
+}
