@@ -133,10 +133,11 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         holdersVestingCount[_auditor] = currentVestingCount + 1;
 
         // Revert if audit nft does not exist
-        require(audit.ownerOf(_tokenId) == msg.sender, "Audit NFT is not owned by caller");
+        require(audit.ownerOf(_tokenId) == _auditor, "Audit NFT is not owned by caller");
 
         // Reveal audit metadata once payment starts
-        audit.trustlessHandoff(msg.sender, _tokenId);
+        // TODO: Make sure that this can be called by the contract not msg.sender
+        audit.trustlessHandoff(_auditor, msg.sender, _tokenId);
     }
 
     /**
@@ -155,12 +156,11 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             vestingSchedule.released += vestedAmount;
             vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditor, vestedAmount);
         }
-        uint256 unreleased = vestingSchedule.amountTotal -
-            vestingSchedule.released;
 
         vestingSchedule.auditInvalidated = true;
 
         uint256 returnTotalAmount = vestingSchedule.amountTotal - vestingSchedule.released;
+        
         vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditee, returnTotalAmount);
     }
 

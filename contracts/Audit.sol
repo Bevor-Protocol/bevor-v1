@@ -65,8 +65,8 @@ contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
         return super.supportsInterface(interfaceId);
     }
 
-    function _baseURI(uint256 _tokenId) internal view returns (string memory) {
-        if (auditRevealed[_tokenId]) {
+    function _baseURI(uint256 tokenId) internal view returns (string memory) {
+        if (auditRevealed[tokenId]) {
             return "https://ipfs.io/ipfs/";
         }
         else {
@@ -74,9 +74,9 @@ contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
         }
     }
 
-    function trustlessHandoff(address _to, uint256 _tokenId) public {
-        auditRevealed[_tokenId] = true;
-        transferFrom(_msgSender(), _to, _tokenId);
+    function trustlessHandoff(address from, address to, uint256 tokenId) public {
+        auditRevealed[tokenId] = true;
+        transferFrom(from, to, tokenId);
     }
 
     /**

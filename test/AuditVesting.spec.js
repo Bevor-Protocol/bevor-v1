@@ -25,7 +25,7 @@ const AuditPayment = artifacts.require("AuditPayment");
 const BevorDAO = artifacts.require("BevorDAO");
 const TimelockController = artifacts.require("TimelockController");
 
-contract('Testing ERC721 contract', function(accounts) {
+contract('Testing AuditVesting contract', function(accounts) {
     let tc;
     let dao;
     let nft;
@@ -74,19 +74,30 @@ contract('Testing ERC721 contract', function(accounts) {
         uint256 _tokenId
         )
         */
-        await nft.mint(account, {from: accounts[0]});
+        await nft.mint(account1, {from: account});
 
         expect(await nft.symbol()).to.equal("BAD");
         expect(await nft.name()).to.equal("BevorAuditDeliverable");
 
-        console.log(nft.address);
+        await tusd.approve(ap.address, 1000, {from: account});
+        await nft.setApprovalForAll(ap.address, true, {from: account1});
 
-        await ap.createVestingSchedule(account, 0, 10 * 10 ** 18, 1000 * 10 ** 18, 10 * 10 ** 18, 1000 * 10 ** 18, 1000 * 10 ** 18, tusd.address, 1);
+        await ap.createVestingSchedule(account1, 0, 10, 1000, 10, 1000, tusd.address, 1, {from: account});
 
-        expect(await ap.vestingSchedules(await ap.computeVestingScheduleIdForAddressAndIndex(
-            account,
-            1
-        ))).to.equal({});
+        // const vs = await ap.vestingSchedules(await ap.computeVestingScheduleIdForAddressAndIndex(
+        //     account,
+        //     1
+        // ));
+
+        const vsId = await ap.vestingSchedulesIds(0);
+
+        console.log("VSID: " + vsId);
+
+        const vs = await ap.vestingSchedules(vsId);
+
+        console.log(vs.auditor);
+
+        expect(vs.auditor).to.equal(account1);
     });
 
     it(' should be able to withdraw tokens as payment vests', async () => {
