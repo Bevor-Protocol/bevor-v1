@@ -336,7 +336,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
 
     /**
      * @dev Returns the current time.
-     * @return the current timestamp in seconds.
+     * @return the current timestamp in seconds. (Switch to internal when deploying)
      */
     function getCurrentTime() internal view virtual returns (uint256) {
         return block.timestamp;
