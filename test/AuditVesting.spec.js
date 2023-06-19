@@ -51,6 +51,9 @@ contract('Testing AuditVesting contract', function(accounts) {
     const account3 = accounts[3];
     const tokenAlloc3 = 200000 * 10 ** 18;
 
+    let vs;
+    let vsId;
+
     beforeEach(async () => {
         bvr = await ERC20Token.new(1000000, name, symbol);
         tusd = await ERC20Token.new(1000000, name1, symbol1);
@@ -58,22 +61,8 @@ contract('Testing AuditVesting contract', function(accounts) {
         dao = await BevorDAO.new(bvr.address, tc.address); 
         nft = await Audit.new();
         ap = await AuditPayment.new(dao.address, nft.address);
-    });
 
-    it(' should be able to deploy and create audit payment', async () => {
-        // Create audit payment for 1000 testUSD tokens
-        /*
-        function createVestingSchedule(
-        address _auditor,
-        uint256 _start,
-        uint256 _cliff,
-        uint256 _duration,
-        uint256 _slicePeriodSeconds,
-        uint256 _amount,
-        ERC20 _token,
-        uint256 _tokenId
-        )
-        */
+        // Auditor account withdraw 10 testUSD tokens after they are released
         await nft.mint(account1, {from: account});
 
         expect(await nft.symbol()).to.equal("BAD");
@@ -82,27 +71,43 @@ contract('Testing AuditVesting contract', function(accounts) {
         await tusd.approve(ap.address, 1000, {from: account});
         await nft.setApprovalForAll(ap.address, true, {from: account1});
 
-        await ap.createVestingSchedule(account1, 0, 10, 1000, 10, 1000, tusd.address, 1, {from: account});
+        await ap.createVestingSchedule(account1, 0, 0, 1000, 10, 1000, tusd.address, 1, {from: account});
 
         // const vs = await ap.vestingSchedules(await ap.computeVestingScheduleIdForAddressAndIndex(
         //     account,
         //     1
         // ));
 
-        const vsId = await ap.vestingSchedulesIds(0);
+        vsId = await ap.vestingSchedulesIds(0);
 
         console.log("VSID: " + vsId);
 
-        const vs = await ap.vestingSchedules(vsId);
+        vs = await ap.vestingSchedules(vsId);
+    });
 
-        console.log(vs.auditor);
-
+    it(' should be able to deploy and create audit payment', async () => {
         expect(vs.auditor).to.equal(account1);
+        expect(vs.auditee).to.equal(account);
+        expect(parseInt(vs.duration)).to.equal(1000);
+        expect(vs.token).to.equal(tusd.address);
+        expect(parseInt(vs.tokenId)).to.equal(1);
     });
 
     it(' should be able to withdraw tokens as payment vests', async () => {
-        // Auditor account withdraw 10 testUSD tokens after they are released
-    });
+        const balAP = parseInt(await tusd.balanceOf(ap.address));
+
+        const relAmt = await ap.computeReleasableAmount(vsId);
+
+        console.log("Releasable amt: " + relAmt);
+        console.log("BALAP: " + balAP);
+
+        await ap.withdraw(vsId, {from: account1});
+
+        const bal = parseInt(await tusd.balanceOf(account1));
+
+        expect(bal).to.equal(1000);
+
+    }).timeout(20000);
 
     it(' should freeze vesting withdrawls for auditor when proposal is created on DAO', async () => {
         // Auditor withdrawl should fail once proposal is created

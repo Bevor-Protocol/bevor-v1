@@ -36,9 +36,9 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // amount of tokens in escrow for payment
         bool auditInvalidated;
         // address of the ERC20 token vesting
-        ERC20 _token;
+        ERC20 token;
         // address of the ERC721 audit NFT
-        uint256 _tokenId;
+        uint256 tokenId;
     }
 
     bytes32[] public vestingSchedulesIds;
@@ -154,14 +154,14 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         if (vestedAmount > 0) {
             vestingSchedule.released += vestedAmount;
-            vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditor, vestedAmount);
+            vestingSchedule.token.transfer(vestingSchedule.auditor, vestedAmount);
         }
 
         vestingSchedule.auditInvalidated = true;
 
         uint256 returnTotalAmount = vestingSchedule.amountTotal - vestingSchedule.released;
         
-        vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditee, returnTotalAmount);
+        vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
     /**
@@ -184,7 +184,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         vestingSchedule.released += vestedAmount;
 
-        vestingSchedule._token.transferFrom(address(this), vestingSchedule.auditor, vestedAmount);
+        vestingSchedule.token.transfer(vestingSchedule.auditor, vestedAmount);
     }
 
     /**
