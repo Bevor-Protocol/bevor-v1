@@ -1,6 +1,6 @@
 // contracts/TokenVesting.sol
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.19;
+pragma solidity ^0.8.19;
 
 import "./AuditPayment.sol";
 
@@ -8,7 +8,7 @@ import "./AuditPayment.sol";
  * @title MockTokenVesting
  * WARNING: use only for testing and debugging purpose
  */
-contract MockTokenVesting is AuditPayment {
+contract MockAuditPayment is AuditPayment {
     uint256 mockTime = 0;
 
     constructor(IAudit token_, address dao_) AuditPayment(dao_, token_) {}
