@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "hardhat/console.sol";
 import "./IAudit.sol";
 
 /**
@@ -29,8 +30,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         bool withdrawlPaused;
         // total amount of tokens to be released at the end of the vesting
         uint256 amountTotal;
-        // amount of tokens released
-        uint256 released;
         // amount of tokens withdrawn
         uint256 withdrawn;
         // amount of tokens in escrow for payment
@@ -123,7 +122,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             false,
             _amount,
             0,
-            0,
             false,
             _token,
             _tokenId
@@ -132,12 +130,12 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 currentVestingCount = holdersVestingCount[_auditor];
         holdersVestingCount[_auditor] = currentVestingCount + 1;
 
-        // Revert if audit nft does not exist
-        require(audit.ownerOf(_tokenId) == _auditor, "Audit NFT is not owned by caller");
+        // Revert if audit nft does not exist (probably do this is NFT contract)
+        //require(audit.ownerOf(_tokenId) == _auditor, "Audit NFT is not owned by caller");
 
         // Reveal audit metadata once payment starts
-        // TODO: Make sure that this can be called by the contract not msg.sender
-        audit.trustlessHandoff(_auditor, msg.sender, _tokenId);
+        // TODO: Make sure that this can be called by the contract not msg.sender [FIX THIS]
+        //audit.trustlessHandoff(_auditor, msg.sender, _tokenId);
     }
 
     /**
@@ -153,13 +151,13 @@ contract AuditPayment is Ownable, ReentrancyGuard {
 
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         if (vestedAmount > 0) {
-            vestingSchedule.released += vestedAmount;
+            vestingSchedule.withdrawn += vestedAmount;
             vestingSchedule.token.transfer(vestingSchedule.auditor, vestedAmount);
         }
 
         vestingSchedule.auditInvalidated = true;
 
-        uint256 returnTotalAmount = vestingSchedule.amountTotal - vestingSchedule.released;
+        uint256 returnTotalAmount = vestingSchedule.amountTotal - vestingSchedule.withdrawn;
         
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
@@ -182,7 +180,14 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             "TokenVesting: only beneficiary and owner can release vested tokens"
         );
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        vestingSchedule.released += vestedAmount;
+        vestingSchedule.withdrawn += vestedAmount;
+
+        console.log(
+                "%s is withdrawing %s tokens and has withdrawn %s total",
+                msg.sender,
+                vestedAmount,
+                vestingSchedule.withdrawn
+        );
 
         vestingSchedule.token.transfer(vestingSchedule.auditor, vestedAmount);
     }
@@ -317,7 +322,13 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         else if (
             currentTime >= vestingSchedule.start + vestingSchedule.duration
         ) {
-            return vestingSchedule.amountTotal - vestingSchedule.released;
+            console.log(
+                "Computing releasable amounts after vesting period from %s to %s %s tokens",
+                msg.sender,
+                vestingSchedule.amountTotal,
+                vestingSchedule.withdrawn
+            );
+            return vestingSchedule.amountTotal - vestingSchedule.withdrawn;
         }
         // Otherwise, some tokens are releasable.
         else {
@@ -330,7 +341,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             uint256 vestedAmount = (vestingSchedule.amountTotal *
                 vestedSeconds) / vestingSchedule.duration;
             // Subtract the amount already released and return.
-            return vestedAmount - vestingSchedule.released;
+            return vestedAmount - vestingSchedule.withdrawn;
         }
     }
 
