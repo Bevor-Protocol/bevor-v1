@@ -354,6 +354,7 @@ describe("TokenVesting", function () {
           )
         ).toString()
       ).to.equal(expectedVestingScheduleId);
+      
       expect(
         (
           await tokenVesting.computeNextVestingScheduleIdForHolder(

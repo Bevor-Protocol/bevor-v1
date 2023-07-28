@@ -19,7 +19,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // beneficiary of tokens after they are released
         address auditee;
         // cliff period in seconds
-        uint256 cliff;
+        uint256 cliff; 
         // start time of the vesting period
         uint256 start;
         // duration of the vesting period in seconds
