@@ -1,66 +1,117 @@
-// import chai from 'chai'
-// import chaiAsPromised from 'chai-as-promised'
-// const truffleAssert = require('truffle-assertions');
-// const chai = require('chai');
-// const chaiAsPromised = require('chai-as-promised');
-// chai.use(chaiAsPromised)
-// const { expect, assert } = chai
+import { AddressType } from "typechain";
 
-// var ViridianNFT = artifacts.require("ViridianNFT");
+const { expect } = require("chai");
+const { ethers, BigNumber } = require("hardhat");
 
-// contract('Testing ERC721 contract', function(accounts) {
+// Fork of https://github.com/abdelhamidbakhta/token-vesting-contracts/blob/5107b251b18ea599095661b407625ddb994b516b/test/TokenVesting.js
 
-//     let token;
-//     const name = "Viridian NFT";
-//     const symbol = "VNFT"
+describe("TokenVesting", function () {
+  let Token: any;
+  let DAO: any;
+  let TL: any;
+  let Audit: any;
+  let testToken: any;
+  let timelock: any;
+  let bevorDAO: any;
+  let auditNFT: any;
+  let TokenVesting: any;
+  let owner: any;
+  let addr1: any;
+  let addr2: any;
+  let addrs: any;
+  const totalSupply = BigInt(1000000);
 
-//     const account1 = accounts[1]
-//     const tokenId1 = 1111;
-//     const tokenUri1 = "This is data for the token 1"; // Does not have to be unique
+  before(async function () {
+    Token = await ethers.getContractFactory("ERC20Token");
+    TL = await ethers.getContractFactory("BevorTimelockController");
+    DAO = await ethers.getContractFactory("BevorDAO");
+    Audit = await ethers.getContractFactory("Audit");
+    TokenVesting = await ethers.getContractFactory("MockAuditPayment");
+  });
 
-//     const account2 = accounts[2]
-//     const tokenId2 = 2222;
-//     const tokenUri2 = "This is data for the token 2"; // Does not have to be unique
+  beforeEach(async function () {
+    [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
+    testToken = await Token.deploy(totalSupply, "Test Token", "TT");
+    await testToken.waitForDeployment();
+    timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
+    await timelock.waitForDeployment();
+    bevorDAO = await DAO.deploy(testToken.getAddress(), timelock.getAddress());
+    await bevorDAO.waitForDeployment();
+    auditNFT = await Audit.deploy();
+    await auditNFT.waitForDeployment();
+  });
 
-//     const account3 = accounts[3]
+  describe("AuditNFT", function () {
+    it('Trustless handoff should change to reveal URI', async () => {
+        //Switches to https://ipfs.io/ipfs/ from https://api.bevor.io/ upon reveal
+        const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+        await tokenVesting.waitForDeployment();
 
-//     beforeEach(async () => {
-//         //console.log(ViridianNFT);
-//         token = await ViridianNFT.new();
-//     });
+        const baseTime = 1622551248;
+        const beneficiary = addr1;
+        const startTime = baseTime;
+        const cliff = 0;
+        const duration = 1000;
+        const slicePeriodSeconds = 1;
+        const amount =  100;
 
-//     it(' should be able to deploy and mint ERC721 token', async () => {
-//         await token.mint(account1, tokenUri1, {from: accounts[0]})
+        await testToken.approve(tokenVesting.getAddress(), 1000);
+        await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
-//         expect(await token.symbol()).to.equal(symbol)
-//         expect(await token.name()).to.equal(name)
-//     });
+        await auditNFT.mint(addr1);
 
-//     it(' should be unique', async () => {
-//         const duplicateTokenID = token.mint(account2, tokenId1, tokenUri2, {from: accounts[0]}) //tokenId
-//         console.log("Create " + JSON.stringify(await duplicateTokenID));
-//         await truffleAssert.reverts(duplicateTokenID, '/VM Exception while processing transaction: revert ERC721: owner query for nonexistent token/');
-//         console.log(JSON.stringify(duplicateTokenID));
-//         expect(duplicateTokenID).to.be.rejectedWith(/VM Exception while processing transaction: revert ERC721: owner query for nonexistent token/)
-//     });
+        expect(await auditNFT.tokenURI(1)).to.equal('https://api.bevor.io/1');
 
-//     it(' should allow safe transfers', async () => {
-//         const unownedTokenId = token.safeTransferFrom(account2, account3, tokenId1, {from: accounts[2]}) // tokenId
-//         await truffleAssert.reverts(token.safeTransferFrom(account2, account3, tokenId1, {from: accounts[2]}), 'ERC721: operator query for nonexistent token');
-//         console.log(unownedTokenId);
-//         expect(unownedTokenId).to.be.rejectedWith(/VM Exception while processing transaction: revert ERC721: owner query for nonexistent token/)
-//         expect(await token.ownerOf(tokenId2)).to.equal(account2)
+        await auditNFT.connect(addr1).trustlessHandoff(addr1, owner, 1);
 
-//         const wrongOwner = token.safeTransferFrom(account1, account3, tokenId2, {from: accounts[1]}) // wrong owner
-//         expect(wrongOwner).to.be.rejectedWith(/VM Exception while processing transaction: revert ERC721: operator query for nonexistent token -- Reason given: ERC721: operator query for nonexistent token./)
-//         expect(await token.ownerOf(tokenId2)).to.equal(account1)
+        expect(await auditNFT.tokenURI(1)).to.equal('https://ipfs.io/ipfs/1');
+    });
 
-//         // Noticed that the from gas param needs to be the token owners or it fails
-//         const wrongFromGas = token.safeTransferFrom(account2, account3, tokenId2, {from: accounts[1]}) // wrong owner
-//         expect(wrongFromGas).to.be.rejectedWith(/VM Exception while processing transaction: revert ERC721: operator query for nonexistent token -- Reason given: ERC721: operator query for nonexistent token./)
-//         expect(await token.ownerOf(tokenId2)).to.equal(account2)
+    it('Audit should change hands after trustless handoff', async () => {
+        //Test this trustlessHandoff(address from, address to, uint256 tokenId)
+        const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+        await tokenVesting.waitForDeployment();
 
-//         await token.safeTransferFrom(account2, account3, tokenId2, {from: accounts[2]})
-//         expect(await token.ownerOf(tokenId2)).to.equal(account3)
-//     });
-// })
+        const baseTime = 1622551248;
+        const beneficiary = addr1;
+        const startTime = baseTime;
+        const cliff = 0;
+        const duration = 1000;
+        const slicePeriodSeconds = 1;
+        const amount =  100;
+
+        await testToken.approve(tokenVesting.getAddress(), 1000);
+        await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+        await auditNFT.mint(addr1);
+
+        await auditNFT.connect(addr1).trustlessHandoff(addr1, owner, 1);
+
+        expect(await auditNFT.ownerOf(1)).to.equal(await owner.getAddress());
+    });
+
+    it('Trustless handoff should only be triggerable by auditor or by vesting contract', async () => {
+        //Test all the rejection and acceptance cases `
+        const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+        await tokenVesting.waitForDeployment();
+
+        const baseTime = 1622551248;
+        const beneficiary = addr1;
+        const startTime = baseTime;
+        const cliff = 0;
+        const duration = 1000;
+        const slicePeriodSeconds = 1;
+        const amount =  100;
+
+        await testToken.approve(tokenVesting.getAddress(), 1000);
+        await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+        await auditNFT.mint(addr1);
+
+        expect(auditNFT.connect(owner).trustlessHandoff(addr1, owner, 1)).to.be.revertedWith("ERC721: transfer from incorrect owner");
+
+        //Add other test cases here as they arise
+    });
+  });
+
+});

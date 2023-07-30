@@ -3,14 +3,13 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./ISmartAgreement.sol";
 
-contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
+contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
     address[] internal _test;
     string public baseURI = "";
     uint256 public maxTokensPerWallet = 100;
@@ -39,39 +38,37 @@ contract Audit is ERC721, ERC721Enumerable, Ownable, ERC2771Recipient {
         address to,
         uint256 firstTokenId,
         uint256 batchSize
-    ) internal virtual override(ERC721, ERC721Enumerable) {
+    ) internal virtual override {
         super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
     }
 
-    function _burn(uint256 tokenId) internal override(ERC721) {
+    function _burn(uint256 tokenId) internal override {
         super._burn(tokenId);
-    }
-
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721)
-        returns (string memory)
-    {
-        return super.tokenURI(tokenId);
     }
 
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721Enumerable)
-        returns (bool)
-    {
+        override(ERC721Enumerable)
+        returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
-    function _baseURI(uint256 tokenId) internal view returns (string memory) {
+    function _baseURI(uint256 tokenId) internal view virtual returns (string memory) {
         if (auditRevealed[tokenId]) {
             return "https://ipfs.io/ipfs/";
         }
         else {
             return "https://api.bevor.io/";
         }
+    }
+
+    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+        _requireMinted(tokenId);
+
+        string memory baseURI = _baseURI(tokenId);
+
+        return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, Strings.toString(tokenId))) : "";
     }
 
     function trustlessHandoff(address from, address to, uint256 tokenId) public {

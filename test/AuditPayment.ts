@@ -52,20 +52,14 @@ describe("TokenVesting", function () {
       const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
       await tokenVesting.waitForDeployment();
       
-      // send tokens to vesting contract
-      //await testToken.transfer(tokenVesting.getAddress(), 1000);
-      
-      await expect(testToken.transfer(tokenVesting.getAddress(), 1000))
+      await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
         .to.emit(testToken, "Transfer")
-        .withArgs(owner.getAddress(), tokenVesting.getAddress(), 1000);
+        .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
 
       const vestingContractBalance = await testToken.balanceOf(
         tokenVesting.getAddress()
       );
       expect(vestingContractBalance).to.equal(1000);
-
-      //TODO: Figure out what this call is for
-      //expect(await tokenVesting.getWithdrawableAmount()).to.equal(1000);
 
       const baseTime = 1622551248;
       const beneficiary = addr1;
@@ -112,11 +106,6 @@ describe("TokenVesting", function () {
 
       console.log(-7)
 
-      // TODO: Change get token to grabbing the token vesting object from the schedule and checking token in there
-      // expect((await tokenVesting.getToken()).toString()).to.equal(
-      //   testToken.getAddress()
-      // );
-
       // compute vesting schedule id
       const vestingScheduleId =
         await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
@@ -144,37 +133,25 @@ describe("TokenVesting", function () {
           .computeReleasableAmount(vestingScheduleId)
       ).to.be.equal(50);
 
-      console.log(-4)
-
       // check that only beneficiary can try to withdraw vested tokens
-      // await expect(
-      //   await tokenVesting.connect(addr2).withdraw(vestingScheduleId, 100)
-      // ).to.be.revertedWith(
-      //   "TokenVesting: only beneficiary and owner can withdraw vested tokens"
-      // );
+      await expect(
+        tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+      ).to.be.revertedWith(
+        "TokenVesting: only beneficiary and owner can release vested tokens"
+      );
 
-      console.log(-3)
-
-      // check that beneficiary cannot withdraw more than the vested amount
-      // await expect(
-      //   tokenVesting.connect(beneficiary).withdraw(vestingScheduleId, 100)
-      // ).to.be.revertedWith(
-      //   "TokenVesting: cannot withdraw tokens, not enough vested tokens"
-      // );
-
-      console.log(-2)
+      const vestingAddr = await tokenVesting.getAddress();
+      const beneficiaryAddr = await beneficiary.getAddress();
 
       // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
-      // await expect(
-      //   tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
-      // )
-      //   .to.emit(testToken, "Transfer")
-      //   .withArgs(tokenVesting.getAddress(), beneficiary.getAddress(), 50);
+      await expect(
+        tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+      )
+        .to.emit(testToken, "Transfer")
+        .withArgs(vestingAddr, beneficiaryAddr, 50);
 
       await tokenVesting.connect(beneficiary).withdraw(vestingScheduleId);
       
-      console.log(-1)
-
       // check that the vested amount is now 0
       expect(
         await tokenVesting
@@ -185,8 +162,6 @@ describe("TokenVesting", function () {
       let vestingSchedule = await tokenVesting.getVestingSchedule(
         vestingScheduleId
       );
-
-      console.log(0)
 
       // check that the withdrawd amount is 10
       expect(vestingSchedule.withdrawn).to.be.equal(50);
@@ -205,24 +180,24 @@ describe("TokenVesting", function () {
 
       console.log(2)
 
-      // beneficiary withdraw vested tokens (45)
-      // await expect(
-      //   tokenVesting.connect(beneficiary).withdraw(vestingScheduleId, 45)
-      // )
-      //   .to.emit(testToken, "Transfer")
-      //   .withArgs(tokenVesting.getAddress(), beneficiary.getAddress(), 45);
+      // beneficiary withdraw vested tokens (50)
+      await expect(
+        tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+      )
+        .to.emit(testToken, "Transfer")
+        .withArgs(vestingAddr, beneficiaryAddr, 50);
 
       //await tokenVesting.connect(beneficiary).withdraw(vestingScheduleId);
 
         console.log(3)
 
-      // owner withdraw vested tokens (45)
-      // await expect(tokenVesting.connect(owner).withdraw(vestingScheduleId, 45))
-      //   .to.emit(testToken, "Transfer")
-      //   .withArgs(tokenVesting.getAddress(), beneficiary.getAddress(), 45);
-      // vestingSchedule = await tokenVesting.getVestingSchedule(
-      //   vestingScheduleId
-      // );
+      // owner withdraw vested tokens (50)
+      await expect(tokenVesting.connect(owner).withdraw(vestingScheduleId))
+        .to.emit(testToken, "Transfer")
+        .withArgs(vestingAddr, beneficiaryAddr, 0);
+      vestingSchedule = await tokenVesting.getVestingSchedule(
+        vestingScheduleId
+      );
 
       await tokenVesting.connect(owner).withdraw(vestingScheduleId);
 
@@ -249,10 +224,10 @@ describe("TokenVesting", function () {
       expect(await vestingSchedule.withdrawn).to.be.equal(100);
 
       // check that anyone cannot revoke a vesting
-      // await expect(
-      //   tokenVesting.connect(addr2).revoke(vestingScheduleId)
-      // ).to.be.revertedWith("UNAUTHORIZED");
-      // await tokenVesting.revoke(vestingScheduleId);
+      await expect(
+        tokenVesting.connect(addr2).invalidateAudit(vestingScheduleId)
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+      await tokenVesting.invalidateAudit(vestingScheduleId);
 
       console.log(7)
 
@@ -282,16 +257,18 @@ describe("TokenVesting", function () {
       // deploy vesting contract
       const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
       await tokenVesting.waitForDeployment();
+      
+      const tokenAddr = await tokenVesting.getAddress();
+      const ownerAddr = await owner.getAddress();
 
       // send tokens to vesting contract
-      // await expect(testToken.transfer(tokenVesting.getAddress(), 1000))
-      //   .to.emit(testToken, "Transfer")
-      //   .withArgs(owner.getAddress(), tokenVesting.getAddress(), 1000);
-
-      await testToken.transfer(tokenVesting.getAddress(), 1000);
+      await expect(testToken.transfer(tokenAddr, 1000))
+        .to.emit(testToken, "Transfer")
+        .withArgs(ownerAddr, tokenAddr, 1000);
 
       const baseTime = 1622551248;
       const beneficiary = addr1;
+      const beneficiaryAddr = await beneficiary.getAddress();
       const startTime = baseTime;
       const cliff = 0;
       const duration = 1000;
@@ -325,27 +302,30 @@ describe("TokenVesting", function () {
         vestingScheduleId
       );
 
+      const tokeAddr = await testToken.getAddress();
+
+      console.log("Token ADDR: " + tokeAddr);
+
         expect((vestingSchedule.token).toString()).to.equal(
-          testToken.getAddress()
+          tokeAddr 
         );
 
       // set time to half the vesting period
       const halfTime = baseTime + duration / 2;
       await tokenVesting.setCurrentTime(halfTime);
 
-      //TODO: Rewrite this in a way that is testable or figure out how to make the emitting work
-
-      //   await expect(tokenVesting.revoke(vestingScheduleId))
-      //     .to.emit(testToken, "Transfer")
-      //     .withArgs(tokenVesting.getAddress(), beneficiary.getAddress(), 50);
-      // });
+      await expect(tokenVesting.invalidateAudit(vestingScheduleId))
+          .to.emit(testToken, "Transfer")
+          .withArgs(tokenAddr, beneficiaryAddr, 50);
+      });
     });
 
     it("Should compute vesting schedule index", async function () {
       const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
       await tokenVesting.waitForDeployment();
+      // Check this for validity before pushing to mainnet, find repo reference for this test
       const expectedVestingScheduleId =
-        "0xa279197a1d7a4b7398aa0248e95b8fcc6cdfb43220ade05d01add9c5468ea097";
+        "0xdc3cc2b1da6040c8422b71ccce0d1f289de3daa26970bbf71e4ca8580e2073a3";
       expect(
         (
           await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
@@ -354,7 +334,7 @@ describe("TokenVesting", function () {
           )
         ).toString()
       ).to.equal(expectedVestingScheduleId);
-      
+
       expect(
         (
           await tokenVesting.computeNextVestingScheduleIdForHolder(
@@ -369,6 +349,10 @@ describe("TokenVesting", function () {
       await tokenVesting.waitForDeployment();
       await testToken.transfer(tokenVesting.getAddress(), 1000);
       const time = Date.now();
+      await testToken.approve(tokenVesting.getAddress(), 1000);
+      await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+      // Nondescript error not happening up to this point
       await expect(
         tokenVesting.createVestingSchedule(
           addr1.getAddress(),
@@ -376,7 +360,6 @@ describe("TokenVesting", function () {
           0,
           0,
           1,
-          false,
           1,
           testToken.getAddress(),
           testToken.getAddress()
@@ -389,25 +372,23 @@ describe("TokenVesting", function () {
           0,
           1,
           0,
-          false,
           1,
           testToken.getAddress(),
           testToken.getAddress()
         )
       ).to.be.revertedWith("TokenVesting: slicePeriodSeconds must be >= 1");
+      
       await expect(
-        await tokenVesting.createVestingSchedule(
+        tokenVesting.createVestingSchedule(
           addr1.getAddress(),
           time,
           0,
           1,
-          0,
-          false,
           1,
+          0,
           testToken.getAddress(),
           testToken.getAddress()
         )
       ).to.be.revertedWith("TokenVesting: amount must be > 0");
     });
-  });
 });
