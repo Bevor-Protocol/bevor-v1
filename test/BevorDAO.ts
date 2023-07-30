@@ -1,127 +1,161 @@
-// const chaiAsPromised = require('chai-as-promised');
-// chai.use(chaiAsPromised)
-// const { expect, assert } = chai
+const chaiAsPromised = require('chai-as-promised');
+chai.use(chaiAsPromised)
+const { expect, assert } = chai
+const { ethers, BigNumber } = require("hardhat");
 
-// // ******* Proposal ethers example: ********
 
-// // const tokenAddress = ...;
-// // const token = await ethers.getContractAt(‘ERC20’, tokenAddress);
+describe('Testing Bevor DAO Functionality', function () {
+    let Token: any;
+    let DAO: any;
+    let TL: any;
+    let Audit: any;
+    let testToken: any;
+    let timelock: any;
+    let bevorDAO: any;
+    let auditNFT: any;
+    let TokenVesting: any;
+    let owner: any;
+    let addr1: any;
+    let addr2: any;
+    let addrs: any;
+    const totalSupply = BigInt(1000000);
 
-// // const teamAddress = ...;
-// // const grantAmount = ...;
-// // const transferCalldata = token.interface.encodeFunctionData(‘transfer’, [teamAddress, grantAmount]);
+    before(async function () {
+        Token = await ethers.getContractFactory("ERC20Token");
+        TL = await ethers.getContractFactory("BevorTimelockController");
+        DAO = await ethers.getContractFactory("BevorDAO");
+        Audit = await ethers.getContractFactory("Audit");
+        TokenVesting = await ethers.getContractFactory("MockAuditPayment");
+    });
 
-// // await governor.propose(
-// //     [tokenAddress],
-// //     [0],
-// //     [transferCalldata],
-// //     “Proposal #1: Give grant to team”,
-// //   );
+    beforeEach(async function () {
+        [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
+        testToken = await Token.deploy(totalSupply, "Test Token", "TT");
+        await testToken.waitForDeployment();
+        timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
+        await timelock.waitForDeployment();
+        bevorDAO = await DAO.deploy(testToken.getAddress(), timelock.getAddress());
+        await bevorDAO.waitForDeployment();
+        auditNFT = await Audit.deploy();
+        await auditNFT.waitForDeployment();
+    });
 
-// const ERC20Token = artifacts.require("ERC20Token");
-// const Audit = artifacts.require("Audit");
-// const AuditPayment = artifacts.require("MockAuditPayment");
-// const BevorDAO = artifacts.require("BevorDAO");
-// const TimelockController = artifacts.require("TimelockController");
+    it(' should freeze vesting withdrawls for auditor when proposal is created on DAO', async () => {
+        // Proposal should call function on AuditPayments that can only be called by the DAO contract
+        // Function should return unvested payments
+        // Proposal should be made through proxy contract that calls function to pause 
+        it("Should vest tokens gradually", async function () {
+            // deploy vesting contract
+            const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+            await tokenVesting.waitForDeployment();
+            
+            await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+              .to.emit(testToken, "Transfer")
+              .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+      
+            const vestingContractBalance = await testToken.balanceOf(
+              tokenVesting.getAddress()
+            );
+            expect(vestingContractBalance).to.equal(1000);
+      
+            const baseTime = 1622551248;
+            const beneficiary = addr1;
+            const startTime = baseTime;
+            const cliff = 0;
+            const duration = 1000;
+            const slicePeriodSeconds = 1;
+            const amount =  100;
+      
+            /*
+            createVestingSchedule(
+              address _auditor,
+              uint256 _start,
+              uint256 _cliff,
+              uint256 _duration,
+              uint256 _slicePeriodSeconds,
+              uint256 _amount,
+              ERC20 _token,
+              uint256 _tokenId
+          )
+            */
+      
+          await testToken.approve(tokenVesting.getAddress(), 1000);
+          await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+      
+            // create new vesting schedule
+            await tokenVesting.createVestingSchedule(
+              beneficiary.getAddress(),
+              startTime,
+              cliff,
+              duration,
+              slicePeriodSeconds,
+              amount,
+              testToken.getAddress(),
+              testToken.getAddress()
+            );
+      
+            expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+            expect(
+              await tokenVesting.getVestingSchedulesCountByBeneficiary(
+                beneficiary.getAddress()
+              )
+            ).to.be.equal(1);
+      
+            console.log(-7)
+      
+            // compute vesting schedule id
+            const vestingScheduleId =
+              await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+                beneficiary.getAddress(),
+                0
+              );
+      
+            // check that vested amount is 0
+            expect(
+              await tokenVesting.computeReleasableAmount(vestingScheduleId)
+            ).to.be.equal(0);
+      
+            console.log(-6)
+      
+            // set time to half the vesting period
+            const halfTime = baseTime + duration / 2;
+            await tokenVesting.setCurrentTime(halfTime);
+      
+            console.log(-5)
+      
+            // check that vested amount is half the total amount to vest
+            expect(
+              await tokenVesting
+                .connect(beneficiary)
+                .computeReleasableAmount(vestingScheduleId)
+            ).to.be.equal(50);
+      
+            // check that only beneficiary can try to withdraw vested tokens
+            await expect(
+              tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+            ).to.be.revertedWith(
+              "TokenVesting: only beneficiary and owner can release vested tokens"
+            );
+      
+            const vestingAddr = await tokenVesting.getAddress();
+            const beneficiaryAddr = await beneficiary.getAddress();
 
-// contract('Testing AuditVesting contract', function(accounts) {
-//     let tc;
-//     let dao;
-//     let nft;
-//     let ap;
 
-//     let bvr;
-//     const name = "Bevor Token";
-//     const symbol = "BVR"
+      
+            // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
+            await expect(
+              tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+            )
+              .to.emit(testToken, "Transfer")
+              .withArgs(vestingAddr, beneficiaryAddr, 50);
+        });
 
-//     let tusd;
-//     const name1 = "Test USD Token";
-//     const symbol1 = "TUSD"
+        it(' should return remaining unvested tokens to auditee for payment if successful DAO proposal deems it invalid', async () => {
+            // Return 990 testUSD tokens to auditee once proposal is successfully voted by BVR holders
+        });
 
-//     const account = accounts[0];
-//     const tokenAlloc = 400000 * 10 ** 18;
+        it(' should unfreeze vesting withdrawls for auditor if DAO proposal is unsuccessful', async () => {
 
-//     const account1 = accounts[1];
-//     const tokenAlloc1 = 100000 * 10 ** 18;
-
-//     const account2 = accounts[2];
-//     const tokenAlloc2 = 300000 * 10 ** 18;
-
-//     const account3 = accounts[3];
-//     const tokenAlloc3 = 200000 * 10 ** 18;
-
-//     let vs;
-//     let vsId;
-
-//     beforeEach(async () => {
-//         bvr = await ERC20Token.new(1000000, name, symbol);
-//         tusd = await ERC20Token.new(1000000, name1, symbol1);
-//         tc = await TimelockController.new(1, [account2], [account1], account);
-//         dao = await BevorDAO.new(bvr.address, tc.address); 
-//         nft = await Audit.new();
-//         ap = await AuditPayment.new(dao.address, nft.address);
-
-//         // Auditor account withdraw 10 testUSD tokens after they are released
-//         await nft.mint(account1, {from: account});
-
-//         expect(await nft.symbol()).to.equal("BAD");
-//         expect(await nft.name()).to.equal("BevorAuditDeliverable");
-
-//         await tusd.approve(ap.address, 1000, {from: account});
-//         await nft.setApprovalForAll(ap.address, true, {from: account1});
-
-//         const curTime = parseInt(await ap.getCurrentTime());
-
-//         console.log("Cur time: " + curTime);
-
-//         await ap.createVestingSchedule(account1, curTime, 0, 1000, 10, 1000, tusd.address, 1, {from: account});
-
-//         // const vs = await ap.vestingSchedules(await ap.computeVestingScheduleIdForAddressAndIndex(
-//         //     account,
-//         //     1
-//         // ));
-
-//         vsId = await ap.vestingSchedulesIds(0);
-
-//         console.log("VSID: " + vsId);
-
-//         vs = await ap.vestingSchedules(vsId);
-//     });
-
-//     it(' should be able to deploy and create audit payment', async () => {
-//         expect(vs.auditor).to.equal(account1);
-//         expect(vs.auditee).to.equal(account);
-//         expect(parseInt(vs.duration)).to.equal(1000);
-//         expect(vs.token).to.equal(tusd.address);
-//         expect(parseInt(vs.tokenId)).to.equal(1);
-//     });
-
-//     it(' should be able to withdraw tokens as payment vests', async () => {
-//         const balAP = parseInt(await tusd.balanceOf(ap.address));
-
-//         const relAmt = await ap.computeReleasableAmount(vsId);
-
-//         console.log("Releasable amt: " + relAmt);
-//         console.log("BALAP: " + balAP);
-
-//         await ap.withdraw(vsId, {from: account1});
-
-//         const bal = parseInt(await tusd.balanceOf(account1));
-
-//         //TODO: Figure out how to manage this cliff correctly and if timeout is working
-
-//         //expect(bal).to.equal(20);
-
-//     });
-
-//     it(' should freeze vesting withdrawls for auditor when proposal is created on DAO', async () => {
-//         // Auditor withdrawl should fail once proposal is created
-//     });
-
-//     it(' should return remaining unvested tokens to auditee for payment if successful DAO proposal deems it invalid', async () => {
-//         // Return 990 testUSD tokens to auditee once proposal is successfully voted by BVR holders
-//     });
-
-//     it(' should unfreeze vesting withdrawls for auditor if DAO proposal is unsuccessful', async () => {
-//     });
-// })
+        });
+    });
+});

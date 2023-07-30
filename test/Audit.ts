@@ -5,7 +5,7 @@ const { ethers, BigNumber } = require("hardhat");
 
 // Fork of https://github.com/abdelhamidbakhta/token-vesting-contracts/blob/5107b251b18ea599095661b407625ddb994b516b/test/TokenVesting.js
 
-describe("TokenVesting", function () {
+describe("AuditNFT Functionality", function () {
   let Token: any;
   let DAO: any;
   let TL: any;

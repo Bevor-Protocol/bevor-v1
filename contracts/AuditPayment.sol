@@ -172,6 +172,9 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
+
+        require(!vestingSchedule.withdrawlPaused, "Withdrawl is paused cannot withdraw");
+
         bool isBeneficiary = msg.sender == vestingSchedule.auditor;
 
         bool isReleasor = (msg.sender == owner());

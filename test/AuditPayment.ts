@@ -150,8 +150,6 @@ describe("TokenVesting", function () {
         .to.emit(testToken, "Transfer")
         .withArgs(vestingAddr, beneficiaryAddr, 50);
 
-      await tokenVesting.connect(beneficiary).withdraw(vestingScheduleId);
-      
       // check that the vested amount is now 0
       expect(
         await tokenVesting
