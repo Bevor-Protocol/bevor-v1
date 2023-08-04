@@ -162,6 +162,14 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
+    function togglePauseWithdrawl(bytes32 vestingScheduleId) public {
+         VestingSchedule storage vestingSchedule = vestingSchedules[
+            vestingScheduleId
+        ];
+    
+        vestingSchedule.withdrawlPaused = !vestingSchedule.withdrawlPaused;
+    }
+
     /**
      * @notice Release vested amount of tokens.
      * @param vestingScheduleId the vesting schedule identifier
