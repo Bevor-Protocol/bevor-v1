@@ -45,6 +45,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     mapping(address => uint256) public holdersVestingCount;
     IAudit public audit;
     address public dao;
+    address public proxy;
 
     /**
      * @dev Reverts if the vesting schedule does not exist or has been revoked.
@@ -64,6 +65,20 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         require(address(audit_) != address(0x0));
         dao = dao_;
         audit = audit_;
+    }
+
+    modifier onlyDAO() {
+        require(msg.sender == dao);
+            _;
+    }
+
+    modifier onlyProxy() {
+        require(msg.sender == proxy);
+            _;
+    }
+
+    function setProxy(address _proxy) external onlyOwner() {
+        proxy = _proxy;
     }
 
     /**
@@ -144,7 +159,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      */
     function invalidateAudit(
         bytes32 vestingScheduleId
-    ) external onlyOwner onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
+    ) public onlyDAO onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
@@ -162,7 +177,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
-    function togglePauseWithdrawl(bytes32 vestingScheduleId) public {
+    function togglePauseWithdrawl(bytes32 vestingScheduleId) public onlyProxy() {
          VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];

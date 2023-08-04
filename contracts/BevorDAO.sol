@@ -9,6 +9,8 @@ import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFractio
 import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 
 contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
+    address proxy;
+
     constructor(IVotes _token, TimelockController _timelock)
         Governor("MyGovernor")
         GovernorSettings(7200 /* 1 day */, 50400 /* 1 week */, 0)
@@ -16,6 +18,16 @@ contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, Governo
         GovernorVotesQuorumFraction(4)
         GovernorTimelockControl(_timelock)
     {}
+
+    function setProxy(address _proxy) external {
+        proxy = _proxy;
+    }
+
+    // May or may not need this
+    modifier onlyProxy() {
+        require(msg.sender == proxy);
+            _;
+    }
 
     // The following functions are overrides required by Solidity.
 
@@ -60,6 +72,7 @@ contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, Governo
         override(Governor, IGovernor)
         returns (uint256)
     {
+        require(msg.sender == proxy);
         return super.propose(targets, values, calldatas, description);
     }
 

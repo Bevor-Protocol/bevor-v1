@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -11,7 +10,6 @@ import "./ISmartAgreement.sol";
 
 contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
     address[] internal _test;
-    string public baseURI = "";
     uint256 public maxTokensPerWallet = 100;
     uint256 _tokenId = 0;
 
