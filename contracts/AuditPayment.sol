@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "hardhat/console.sol";
 import "./IAudit.sol";
+import "./IBevorDAO.sol";
 
 /**
  * @title AuditPayment
@@ -27,7 +28,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // duration of a slice period for the vesting in seconds
         uint256 slicePeriodSeconds;
         // whether or not the vesting is revocable
-        bool withdrawlPaused;
+        uint256 invalidatingProposalId;
         // total amount of tokens to be released at the end of the vesting
         uint256 amountTotal;
         // amount of tokens withdrawn
@@ -44,8 +45,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     mapping(bytes32 => VestingSchedule) public vestingSchedules;
     mapping(address => uint256) public holdersVestingCount;
     IAudit public audit;
-    address public dao;
-    address public proxy;
+    IBevorDAO public dao;
 
     /**
      * @dev Reverts if the vesting schedule does not exist or has been revoked.
@@ -63,17 +63,12 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // Check that the token address is not 0x0.
         require(dao_ != address(0x0));
         require(address(audit_) != address(0x0));
-        dao = dao_;
+        dao = IBevorDAO(dao_);
         audit = audit_;
     }
 
     modifier onlyDAO() {
-        require(msg.sender == dao);
-            _;
-    }
-
-    modifier onlyProxy() {
-        require(msg.sender == proxy);
+        require(msg.sender == dao.getAddress());
             _;
     }
 
@@ -137,7 +132,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             false,
             _amount,
             0,
-            false,
+            0,
             _token,
             _tokenId
         );
@@ -177,12 +172,21 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
-    function togglePauseWithdrawl(bytes32 vestingScheduleId) public onlyProxy() {
-         VestingSchedule storage vestingSchedule = vestingSchedules[
+    function proposeCancelVesting(bytes32 vestingScheduleId) public {
+        VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
-    
-        vestingSchedule.withdrawlPaused = !vestingSchedule.withdrawlPaused;
+
+        require(vestingSchedule.cancellingProposalId != 0, "Cannot set the cancellation proposal more than once");
+        require(msg.sender == vestingSChedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
+
+        //TODO: Figure out structure for proposal args.
+        uint256 proposalId = IBevorDAO(dao).propose([dao],
+        ["propose"],
+        [], //Calldatas
+        "Proposal to cancel vesting for audit.");
+
+        vestingSchedule.cancellingProposalId = proposalId;
     }
 
     /**
@@ -196,7 +200,19 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             vestingScheduleId
         ];
 
-        require(!vestingSchedule.withdrawlPaused, "Withdrawl is paused cannot withdraw");
+        require(vestingSchedule.vestingScheduleId != 0 
+            || vestingSchedule.auditee == IBevorDAO(dao).getProposer(vestingSchedule.invalidatingProposalId), 
+                "Withdrawl is paused due to open proposal cannot withdraw until vesting schedule is complete");
+
+        bool isBeneficiary = msg.sender == vestingSchedule.auditor;
+
+        bool isReleasor = (msg.sender == owner());
+        require(
+            isBeneficiary || isReleasor,
+            "TokenVesting: only beneficiary and owner can release vested tokens"
+        );
+        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+        vestingSchedule.withdrawn += vestedAmount;
 
         bool isBeneficiary = msg.sender == vestingSchedule.auditor;
 
@@ -318,16 +334,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
                     holdersVestingCount[holder] - 1
                 )
             ];
-    }
-
-    /**
-     * @dev Computes the vesting schedule identifier for an address and an index.
-     */
-    function computeVestingScheduleIdForAddressAndIndex(
-        address holder,
-        uint256 index
-    ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(holder, index));
     }
 
     /**

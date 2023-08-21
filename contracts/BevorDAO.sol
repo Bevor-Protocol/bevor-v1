@@ -7,30 +7,19 @@ import "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol
 import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
+import "./IBevorDAO.sol";
 
-contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
-    address proxy;
+contract BevorDAO is IBevorDAO, Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
 
     constructor(IVotes _token, TimelockController _timelock)
-        Governor("MyGovernor")
+        Governor("BevorGovernor")
         GovernorSettings(7200 /* 1 day */, 50400 /* 1 week */, 0)
         GovernorVotes(_token)
         GovernorVotesQuorumFraction(4)
         GovernorTimelockControl(_timelock)
     {}
 
-    function setProxy(address _proxy) external {
-        proxy = _proxy;
-    }
-
-    // May or may not need this
-    modifier onlyProxy() {
-        require(msg.sender == proxy);
-            _;
-    }
-
     // The following functions are overrides required by Solidity.
-
     function votingDelay()
         public
         view
@@ -72,7 +61,6 @@ contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, Governo
         override(Governor, IGovernor)
         returns (uint256)
     {
-        require(msg.sender == proxy);
         return super.propose(targets, values, calldatas, description);
     }
 

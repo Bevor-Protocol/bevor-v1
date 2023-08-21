@@ -221,12 +221,12 @@ describe("TokenVesting", function () {
 
       expect(await vestingSchedule.withdrawn).to.be.equal(100);
 
-      // check that anyone cannot revoke a vesting
-      await expect(
+      // check that anyone cannot revoke a vesting (CALL THIS IN BEVORDAO.TS)
+      /*await expect(
         tokenVesting.connect(addr2).invalidateAudit(vestingScheduleId)
       ).to.be.revertedWith("Ownable: caller is not the owner");
       await tokenVesting.invalidateAudit(vestingScheduleId);
-
+      */
       console.log(7)
 
       /*
@@ -312,9 +312,9 @@ describe("TokenVesting", function () {
       const halfTime = baseTime + duration / 2;
       await tokenVesting.setCurrentTime(halfTime);
 
-      await expect(tokenVesting.invalidateAudit(vestingScheduleId))
+      /*await expect(tokenVesting.invalidateAudit(vestingScheduleId))
           .to.emit(testToken, "Transfer")
-          .withArgs(tokenAddr, beneficiaryAddr, 50);
+          .withArgs(tokenAddr, beneficiaryAddr, 50);*/
       });
     });
 
