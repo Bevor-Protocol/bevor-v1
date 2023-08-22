@@ -1,6 +1,6 @@
 // contracts/TokenVesting.sol
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./AuditPayment.sol";
 
@@ -11,7 +11,7 @@ import "./AuditPayment.sol";
 contract MockAuditPayment is AuditPayment {
     uint256 mockTime = 0;
 
-    constructor(IAudt audit_, address dao_) AuditPayment(dao_, audit_) {}
+    constructor(IAudit audit_, address dao_) AuditPayment(dao_, audit_) {}
 
     function setCurrentTime(uint256 _time) external {
         mockTime = _time;

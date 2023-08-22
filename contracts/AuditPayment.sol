@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 // OpenZeppelin dependencies
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -68,12 +68,8 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     }
 
     modifier onlyDAO() {
-        require(msg.sender == dao.getAddress());
+        require(msg.sender == address(dao));
             _;
-    }
-
-    function setProxy(address _proxy) external onlyOwner() {
-        proxy = _proxy;
     }
 
     /**
@@ -173,42 +169,33 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     }
 
     
-function proposeCancelVesting(bytes32 vestingScheduleId) public {
-    VestingSchedule storage vestingSchedule =
-        vestingSchedules[vestingScheduleId];
+    function proposeCancelVesting(bytes32 vestingScheduleId) public {
+        VestingSchedule storage vestingSchedule =
+            vestingSchedules[vestingScheduleId];
 
-    require(vestingSchedule.cancellingProposalId == 0, "Cannot set the
-            cancellation proposal more than once"); require(msg.sender ==
-                vestingSchedule.auditee, "Cannot propose that the audit is
-            invalid if you are not the auditee");
+        require(vestingSchedule.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
+        require(msg.sender == vestingSchedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
 
-            // Call the 'invalidateAudit' function in the Audit Payment
-            // contract This assumes 'auditNFT' is an instance of the Audit
-            // Payment contract
-            auditNFT.invalidateAudit(vestingScheduleId);
+        // Your DAO proposal creation logic might look like this: TODO:
+        // Replace the following lines with your actual DAO proposal
+        // creation code
+        address[] memory targets = new address[](1); 
+        string[] memory signatures = new string[](1); 
+        bytes[] memory calldatas = new bytes[](1);
 
-            // Your DAO proposal creation logic might look like this: TODO:
-            // Replace the following lines with your actual DAO proposal
-            // creation code
-            address[] memory targets = new address[](1); string[] memory
-            signatures = new string[](1); bytes[] memory calldatas = new
-            bytes[](1);
+        targets[0] = address(this); 
+        signatures[0] = "invalidateAudit(bytes32)"; 
+        calldatas[0] = abi.encode(vestingScheduleId);
 
-            targets[0] = address(this); signatures[0] =
-                "invalidateAudit(bytes32)"; calldatas[0] =
-                abi.encode(vestingScheduleId);
-
-            // Assuming 'dao' is your DAO contract
-            uint256 proposalId = dao.propose(targets, [0], signatures,
-                                             calldatas, "Proposal to cancel
-                                             vesting for audit");
-
-                                             vestingSchedule.cancellingProposalId
-                                             = proposalId; 
+        // Assuming 'dao' is your DAO contract
+        uint256 proposalId = dao.propose(targets, [0], signatures, calldatas, "Proposal to cancel vesting for audit");
+        
+        vestingSchedule.invalidatingProposalId = proposalId; 
     }
 
     /**
      * @notice Release vested amount of tokens.
+     * TODO: Figure out how to restrict withdrawls when the 
      * @param vestingScheduleId the vesting schedule identifier
      */
     function withdraw(
@@ -218,19 +205,10 @@ function proposeCancelVesting(bytes32 vestingScheduleId) public {
             vestingScheduleId
         ];
 
-        require(vestingSchedule.vestingScheduleId != 0 
+        // TODO: Replace the getProposer check with a check on whether the proposal has failed
+        require(vestingSchedule.invalidatingProposalId == 0 
             || vestingSchedule.auditee == IBevorDAO(dao).getProposer(vestingSchedule.invalidatingProposalId), 
-                "Withdrawl is paused due to open proposal cannot withdraw until vesting schedule is complete");
-
-        bool isBeneficiary = msg.sender == vestingSchedule.auditor;
-
-        bool isReleasor = (msg.sender == owner());
-        require(
-            isBeneficiary || isReleasor,
-            "TokenVesting: only beneficiary and owner can release vested tokens"
-        );
-        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        vestingSchedule.withdrawn += vestedAmount;
+                "Withdrawl is paused due to open proposal cannot withdraw again unless proposal fails.");
 
         bool isBeneficiary = msg.sender == vestingSchedule.auditor;
 
@@ -352,6 +330,16 @@ function proposeCancelVesting(bytes32 vestingScheduleId) public {
                     holdersVestingCount[holder] - 1
                 )
             ];
+    }
+
+    /**
+     * @dev Computes the vesting schedule identifier for an address and an index.
+     */
+    function computeVestingScheduleIdForAddressAndIndex(
+        address holder,
+        uint256 index
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(holder, index));
     }
 
     /**
