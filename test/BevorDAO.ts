@@ -62,18 +62,7 @@ describe('Testing Bevor DAO Functionality', function() {
     const duration = 1000;
     const slicePeriodSeconds = 1;
     const amount = 100;
-
-    /*
-    createVestingSchedule(
-      address _auditor,
-      uint256 _start,
-      uint256 _cliff,
-      uint256 _duration,
-      uint256 _slicePeriodSeconds,
-      uint256 _amount,
-      ERC20 _token,
-      uint256 _tokenId)
-    */
+    
 
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);

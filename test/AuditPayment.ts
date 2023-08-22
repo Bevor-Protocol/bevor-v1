@@ -311,10 +311,6 @@ describe("TokenVesting", function () {
       // set time to half the vesting period
       const halfTime = baseTime + duration / 2;
       await tokenVesting.setCurrentTime(halfTime);
-
-      /*await expect(tokenVesting.invalidateAudit(vestingScheduleId))
-          .to.emit(testToken, "Transfer")
-          .withArgs(tokenAddr, beneficiaryAddr, 50);*/
       });
     });
 

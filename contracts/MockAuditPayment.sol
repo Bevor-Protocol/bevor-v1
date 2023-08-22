@@ -11,7 +11,7 @@ import "./AuditPayment.sol";
 contract MockAuditPayment is AuditPayment {
     uint256 mockTime = 0;
 
-    constructor(IAudit token_, address dao_) AuditPayment(dao_, token_) {}
+    constructor(IAudt audit_, address dao_) AuditPayment(dao_, audit_) {}
 
     function setCurrentTime(uint256 _time) external {
         mockTime = _time;

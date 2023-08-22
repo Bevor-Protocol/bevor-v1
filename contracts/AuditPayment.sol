@@ -172,21 +172,39 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
-    function proposeCancelVesting(bytes32 vestingScheduleId) public {
-        VestingSchedule storage vestingSchedule = vestingSchedules[
-            vestingScheduleId
-        ];
+    
+function proposeCancelVesting(bytes32 vestingScheduleId) public {
+    VestingSchedule storage vestingSchedule =
+        vestingSchedules[vestingScheduleId];
 
-        require(vestingSchedule.cancellingProposalId != 0, "Cannot set the cancellation proposal more than once");
-        require(msg.sender == vestingSChedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
+    require(vestingSchedule.cancellingProposalId == 0, "Cannot set the
+            cancellation proposal more than once"); require(msg.sender ==
+                vestingSchedule.auditee, "Cannot propose that the audit is
+            invalid if you are not the auditee");
 
-        //TODO: Figure out structure for proposal args.
-        uint256 proposalId = IBevorDAO(dao).propose([address(this)],
-        ["invalidateAudit"],
-        [abi.encode(vestingScheduleId)], //Calldatas
-        "Proposal to cancel vesting for audit called on this contract.");
+            // Call the 'invalidateAudit' function in the Audit Payment
+            // contract This assumes 'auditNFT' is an instance of the Audit
+            // Payment contract
+            auditNFT.invalidateAudit(vestingScheduleId);
 
-        vestingSchedule.cancellingProposalId = proposalId;
+            // Your DAO proposal creation logic might look like this: TODO:
+            // Replace the following lines with your actual DAO proposal
+            // creation code
+            address[] memory targets = new address[](1); string[] memory
+            signatures = new string[](1); bytes[] memory calldatas = new
+            bytes[](1);
+
+            targets[0] = address(this); signatures[0] =
+                "invalidateAudit(bytes32)"; calldatas[0] =
+                abi.encode(vestingScheduleId);
+
+            // Assuming 'dao' is your DAO contract
+            uint256 proposalId = dao.propose(targets, [0], signatures,
+                                             calldatas, "Proposal to cancel
+                                             vesting for audit");
+
+                                             vestingSchedule.cancellingProposalId
+                                             = proposalId; 
     }
 
     /**
