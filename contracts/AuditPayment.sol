@@ -181,10 +181,10 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         require(msg.sender == vestingSChedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
 
         //TODO: Figure out structure for proposal args.
-        uint256 proposalId = IBevorDAO(dao).propose([dao],
-        ["propose"],
-        [], //Calldatas
-        "Proposal to cancel vesting for audit.");
+        uint256 proposalId = IBevorDAO(dao).propose([address(this)],
+        ["invalidateAudit"],
+        [abi.encode(vestingScheduleId)], //Calldatas
+        "Proposal to cancel vesting for audit called on this contract.");
 
         vestingSchedule.cancellingProposalId = proposalId;
     }
