@@ -62,7 +62,7 @@ describe('Testing Bevor DAO Functionality', function() {
     const duration = 1000;
     const slicePeriodSeconds = 1;
     const amount = 100;
-    
+
 
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
@@ -136,8 +136,164 @@ describe('Testing Bevor DAO Functionality', function() {
     await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
   });
 
-  it(' should return remaining unvested tokens to auditee for payment if successful DAO proposal deems it invalid', async () => { // Return 990 testUSD tokens to auditee once proposal is successfully voted by BVR holders 
+
+  it('should return remaining unvested tokens to auditee for payment if successful DAO proposal deems it invalid', async () => {
+    // Create a vesting schedule and perform necessary setup steps
+    // (Assuming you have already created a vesting schedule as in your previous test)
+    // deploy vesting contract
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
+
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+
+
+    // Make a proposal to return unvested tokens to the auditee
+    // This proposal should be based on the vesting address
+    await tokenVesting.proposeCancelVesting(vestingScheduleId);
+
+    // Vote on the proposal with BVR holders (simulate a successful vote)
+    await bevorDAO.castVote(bevorDAO.proposalCount());
+
+    // Wait for the voting period to end (ensure the proposal is successful)
+    // You may need to adjust this time period based on your DAO configuration
+    await ethers.provider.send('evm_increaseTime', [duration]);
+    await ethers.provider.send('evm_mine');
+
+    // Execute the successful proposal to return unvested tokens
+    await bevorDAO.execute(bevorDAO.proposalCount());
+
+    // Check that unvested tokens have been returned to the auditee's address
+    const auditeeBalance = await testToken.balanceOf(addr1.address);
+    expect(auditeeBalance).to.equal(expectedAuditeeBalance);
+
+    // Additional assertions as needed
   });
 
-  it(' should unfreeze vesting withdrawls for auditor if DAO proposal is unsuccessful', async () => { });
+  it('should unfreeze vesting withdrawals for auditor if DAO proposal is unsuccessful', async () => {
+    // Create a vesting schedule and perform necessary setup steps
+    // (Assuming you have already created a vesting schedule as in your previous test)
+
+    // Make a proposal to unfreeze vesting withdrawals for the auditor
+    // This proposal should be based on the vesting address
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
+
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+
+
+    // Make a proposal to return unvested tokens to the auditee
+    // This proposal should be based on the vesting address
+    await tokenVesting.proposeCancelVesting(vestingScheduleId);
+
+    // Vote on the proposal with BVR holders (simulate an unsuccessful vote)
+    await bevorDAO.castVote(bevorDAO.proposalCount());
+
+    // Wait for the voting period to end (ensure the proposal is unsuccessful)
+    // You may need to adjust this time period based on your DAO configuration
+    await ethers.provider.send('evm_increaseTime', [duration]);
+    await ethers.provider.send('evm_mine');
+
+    // Check that vesting withdrawals for the auditor have been unfrozen ***Fix this syntax with a chatGPT comparison to other file***
+    const isFrozen = await tokenVesting.vestingWithdrawalsFrozen();
+    expect(isFrozen).to.equal(false);
+
+    // Additional assertions as needed
+  });
+
 });
