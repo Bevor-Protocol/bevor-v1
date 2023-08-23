@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import "./AuditPayment.sol";
+import "./BevorDAO.sol";
 
 /**
  * @title MockTokenVesting
@@ -11,7 +12,7 @@ import "./AuditPayment.sol";
 contract MockAuditPayment is AuditPayment {
     uint256 mockTime = 0;
 
-    constructor(IAudit audit_, address dao_) AuditPayment(dao_, audit_) {}
+    constructor(IAudit audit_, BevorDAO dao_) AuditPayment(dao_, audit_) {}
 
     function setCurrentTime(uint256 _time) external {
         mockTime = _time;

@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/governance/IGovernor.sol";
 import "hardhat/console.sol";
 import "./IAudit.sol";
 import "./IBevorDAO.sol";
+import "./BevorDAO.sol";
 
 /**
  * @title AuditPayment
@@ -44,25 +45,17 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     mapping(bytes32 => VestingSchedule) public vestingSchedules;
     mapping(address => uint256) public holdersVestingCount;
     IAudit public audit;
-    IBevorDAO public dao;
-
-    /**
-     * @dev Reverts if the vesting schedule does not exist or has been revoked.
-     */
-    modifier onlyIfVestingScheduleNotRevoked(bytes32 vestingScheduleId) {
-        require(!vestingSchedules[vestingScheduleId].auditInvalidated);
-        _;
-    }
+    BevorDAO public dao;
 
     /**
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
      */
-    constructor(address dao_, IAudit audit_) {
+    constructor(BevorDAO dao_, IAudit audit_) {
         // Check that the token address is not 0x0.
-        require(dao_ != address(0x0));
+        require(address(dao_) != address(0x0));
         require(address(audit_) != address(0x0));
-        dao = IBevorDAO(dao_);
+        dao = dao_;
         audit = audit_;
     }
 
@@ -130,6 +123,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             _token,
             _tokenId
         );
+
         vestingSchedulesIds.push(vestingScheduleId);
         uint256 currentVestingCount = holdersVestingCount[_auditor];
         holdersVestingCount[_auditor] = currentVestingCount + 1;
@@ -148,7 +142,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      */
     function invalidateAudit(
         bytes32 vestingScheduleId
-    ) public onlyDAO onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
+    ) public onlyDAO {
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
@@ -158,8 +152,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             vestingSchedule.withdrawn += vestedAmount;
             vestingSchedule.token.transfer(vestingSchedule.auditor, vestedAmount);
         }
-
-        vestingSchedule.auditInvalidated = true;
 
         uint256 returnTotalAmount = vestingSchedule.amountTotal - vestingSchedule.withdrawn;
         
@@ -178,32 +170,31 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // Replace the following lines with your actual DAO proposal
         // creation code
         address[] memory targets = new address[](1); 
-        string[] memory signatures = new string[](1); 
+        uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
 
         targets[0] = address(this); 
-        signatures[0] = "invalidateAudit(bytes32)"; 
+        //signatures[0] = "invalidateAudit(bytes32)"; TODO: Figure out how to call invalidateAudit with value 
+        values[0] = 1;
         calldatas[0] = abi.encode(vestingScheduleId);
 
         // Assuming 'dao' is your DAO contract
-        uint256 proposalId = dao.propose(targets, [0], signatures, calldatas, "Proposal to cancel vesting for audit");
-        
-        vestingSchedule.invalidatingProposalId = proposalId; 
+        vestingSchedule.invalidatingProposalId = dao.propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
     }
 
     /**
       * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
       */
-    function isWithdrawlPaused(bytes32 vestingScheduleId) {
+    function isWithdrawlPaused(bytes32 vestingScheduleId) private view returns (bool) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
 
         if (vestingSchedule.invalidatingProposalId != 0) {
-           return vestingSchedule.auditee == IBevorDAO(dao).getProposer(vestingSchedule.invalidatingProposalId) &&
-                (IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Pending ||
-                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Active ||
-                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Succeeded ||
-                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Queued ||
-                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Executed); 
+           return vestingSchedule.auditee == dao.proposalProposer(vestingSchedule.invalidatingProposalId) &&
+                (dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Pending ||
+                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Active ||
+                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Succeeded ||
+                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Queued ||
+                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Executed); 
                 
         } else {
             return false;
@@ -217,7 +208,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      */
     function withdraw(
         bytes32 vestingScheduleId
-    ) public nonReentrant onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
+    ) public nonReentrant {
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
@@ -299,7 +290,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     )
         external
         view
-        onlyIfVestingScheduleNotRevoked(vestingScheduleId)
         returns (uint256)
     {
         VestingSchedule storage vestingSchedule = vestingSchedules[
@@ -366,7 +356,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // Retrieve the current time.
         uint256 currentTime = getCurrentTime();
         // If the current time is before the cliff, no tokens are releasable.
-        if ((currentTime < vestingSchedule.cliff) || vestingSchedule.auditInvalidated) {
+        if (currentTime < vestingSchedule.cliff) {
             return 0;
         }
         // If the current time is after the vesting period, all tokens are releasable,
