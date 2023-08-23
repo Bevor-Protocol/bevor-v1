@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/governance/IGovernor.sol";
 import "hardhat/console.sol";
 import "./IAudit.sol";
 import "./IBevorDAO.sol";
@@ -33,8 +34,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 amountTotal;
         // amount of tokens withdrawn
         uint256 withdrawn;
-        // amount of tokens in escrow for payment
-        bool auditInvalidated;
         // address of the ERC20 token vesting
         ERC20 token;
         // address of the ERC721 audit NFT
@@ -125,9 +124,8 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             _start,
             _duration,
             _slicePeriodSeconds,
-            false,
-            _amount,
             0,
+            _amount,
             0,
             _token,
             _tokenId
@@ -194,6 +192,25 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     }
 
     /**
+      * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
+      */
+    function isWithdrawlPaused(bytes32 vestingScheduleId) {
+        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+
+        if (vestingSchedule.invalidatingProposalId != 0) {
+           return vestingSchedule.auditee == IBevorDAO(dao).getProposer(vestingSchedule.invalidatingProposalId) &&
+                (IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Pending ||
+                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Active ||
+                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Succeeded ||
+                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Queued ||
+                IBevorDAO(dao).state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Executed); 
+                
+        } else {
+            return false;
+        } 
+    }
+
+    /**
      * @notice Release vested amount of tokens.
      * TODO: Figure out how to restrict withdrawls when the 
      * @param vestingScheduleId the vesting schedule identifier
@@ -205,11 +222,8 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             vestingScheduleId
         ];
 
-        // TODO: Replace the getProposer check with a check on whether the proposal has failed
-        require(vestingSchedule.invalidatingProposalId == 0 
-            || vestingSchedule.auditee == IBevorDAO(dao).getProposer(vestingSchedule.invalidatingProposalId), 
-                "Withdrawl is paused due to open proposal cannot withdraw again unless proposal fails.");
-
+        require(!isWithdrawlPaused(vestingScheduleId), "Vesting is paused due to pending proposal cannot withdraw tokens");
+       
         bool isBeneficiary = msg.sender == vestingSchedule.auditor;
 
         bool isReleasor = (msg.sender == owner());
