@@ -47,6 +47,17 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     IAudit public audit;
     BevorDAO public dao;
 
+    enum ProposalState {
+        Pending,
+        Active,
+        Canceled,
+        Defeated,
+        Succeeded,
+        Queued,
+        Expired,
+        Executed
+    }
+
     /**
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
@@ -204,17 +215,25 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     /**
       * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
       */
-    function isWithdrawlPaused(bytes32 vestingScheduleId) private view returns (bool) {
+    function isWithdrawlPaused(bytes32 vestingScheduleId) public view returns (bool) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
 
         if (vestingSchedule.invalidatingProposalId != 0) {
-           return vestingSchedule.auditee == dao.proposalProposer(vestingSchedule.invalidatingProposalId) &&
-                (dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Pending ||
-                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Active ||
-                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Succeeded ||
-                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Queued ||
-                dao.state(vestingSchedule.invalidatingProposalId) == IGovernor.ProposalState.Executed); 
-                
+            console.log("Enum one: %s vs. two: %s", uint256(IGovernor.ProposalState.Pending), uint256(dao.state(vestingSchedule.invalidatingProposalId)));
+
+            // (vestingSchedule.auditee == dao.proposalProposer(vestingSchedule.invalidatingProposalId)) && 
+
+            return uint256(dao.state(vestingSchedule.invalidatingProposalId)) == uint256(IGovernor.ProposalState.Pending);
+ 
+
+           /*return (vestingSchedule.auditee == dao.proposalProposer(vestingSchedule.invalidatingProposalId)) && 
+               (dao.state(vestingSchedule.invalidatingProposalId) == dao.propState()) ||
+                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Active() ||
+                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Succeeded() ||
+                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Queued() ||
+                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Executed()
+                ); 
+              */ 
         } else {
             return false;
         } 

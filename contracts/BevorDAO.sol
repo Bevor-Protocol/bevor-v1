@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFractio
 import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 
 contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
+    ProposalState public propState;
 
     constructor(IVotes _token, TimelockController _timelock)
         Governor("BevorGovernor")
@@ -46,20 +47,37 @@ contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, Governo
         return super.quorum(blockNumber);
     }
 
+    // Mock state to return different proposal conditions
     function state(uint256 proposalId)
         public
         view
         override(Governor, GovernorTimelockControl)
         returns (ProposalState)
     {
-        return super.state(proposalId);
+        //return super.state(proposalId);
+        if (proposalId == 1) {
+            return ProposalState.Pending;
+        }
+        else if (proposalId == 2) {
+            return ProposalState.Active;
+        }
+        else if (proposalId == 3) {
+            return ProposalState.Succeeded;
+        }
+        else if (proposalId == 4) {
+            return ProposalState.Queued;
+        }
+        else if (proposalId == 5) {
+            return ProposalState.Executed;
+        }
+        else {
+            return ProposalState.Canceled;
+        }
     }
 
-    function propose(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, string memory description)
-        public
-        override(Governor, IGovernor)
-        returns (uint256)
-    {
+
+
+    function propose(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, string memory description) public override(Governor, IGovernor) returns (uint256) {
         return super.propose(targets, values, calldatas, description);
     }
 

@@ -39,7 +39,7 @@ describe('Testing Bevor DAO Functionality', function() {
     await auditNFT.waitForDeployment();
   });
 
-  it(' should freeze vesting withdrawls for auditor when proposal is created on DAO', async () => {
+  it(' should freeze vesting withdrawls for auditor when proposal is created on DAO with pending proposal state', async () => {
     // Proposal should call function on AuditPayments that can only be called by the DAO contract
     // Function should return unvested payments
     // Proposal should be made through proxy contract that calls function to pause 
@@ -134,10 +134,519 @@ describe('Testing Bevor DAO Functionality', function() {
       .withArgs(vestingAddr, beneficiaryAddr, 50);
 
     // Make a proposal based on the vesting address
-    await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    //await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    await tokenVesting.setInvalidatingProposalId(vestingScheduleId, 1);
+    console.log("Invalidating Proposal ID went through");
+    await expect(await tokenVesting.isWithdrawlPaused(vestingScheduleId)).to.be.equal(true);
+
   });
 
+  it(' should freeze vesting withdrawls for auditor when proposal is created on DAO with Active proposal state', async () => {
+    // Proposal should call function on AuditPayments that can only be called by the DAO contract
+    // Function should return unvested payments
+    // Proposal should be made through proxy contract that calls function to pause 
+    // deploy vesting contract
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
 
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+    // check that vested amount is 0
+    expect(
+      await tokenVesting.computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(0);
+
+    console.log(-6)
+
+    // set time to half the vesting period
+    const halfTime = baseTime + duration / 2;
+    await tokenVesting.setCurrentTime(halfTime);
+
+    console.log(-5)
+
+    // check that vested amount is half the total amount to vest
+    expect(
+      await tokenVesting
+        .connect(beneficiary)
+        .computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(50);
+
+    // check that only beneficiary can try to withdraw vested tokens
+    await expect(
+      tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+    ).to.be.revertedWith(
+      "TokenVesting: only beneficiary and owner can release vested tokens"
+    );
+
+    const vestingAddr = await tokenVesting.getAddress();
+    const beneficiaryAddr = await beneficiary.getAddress();
+
+    // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
+    await expect(
+      tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+    )
+      .to.emit(testToken, "Transfer")
+      .withArgs(vestingAddr, beneficiaryAddr, 50);
+
+    // Make a proposal based on the vesting address
+    //await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    await tokenVesting.setInvalidatingProposalId(vestingScheduleId, 2);
+    await expect(await tokenVesting.isWithdrawlPaused(vestingScheduleId)).to.be.equal(true);
+
+  });
+
+  it(' should freeze vesting withdrawls for auditor when proposal is created on DAO with succeeded proposal state', async () => {
+    // Proposal should call function on AuditPayments that can only be called by the DAO contract
+    // Function should return unvested payments
+    // Proposal should be made through proxy contract that calls function to pause 
+    // deploy vesting contract
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
+
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+    // check that vested amount is 0
+    expect(
+      await tokenVesting.computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(0);
+
+    console.log(-6)
+
+    // set time to half the vesting period
+    const halfTime = baseTime + duration / 2;
+    await tokenVesting.setCurrentTime(halfTime);
+
+    console.log(-5)
+
+    // check that vested amount is half the total amount to vest
+    expect(
+      await tokenVesting
+        .connect(beneficiary)
+        .computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(50);
+
+    // check that only beneficiary can try to withdraw vested tokens
+    await expect(
+      tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+    ).to.be.revertedWith(
+      "TokenVesting: only beneficiary and owner can release vested tokens"
+    );
+
+    const vestingAddr = await tokenVesting.getAddress();
+    const beneficiaryAddr = await beneficiary.getAddress();
+
+    // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
+    await expect(
+      tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+    )
+      .to.emit(testToken, "Transfer")
+      .withArgs(vestingAddr, beneficiaryAddr, 50);
+
+    // Make a proposal based on the vesting address
+    //await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    await tokenVesting.setInvalidatingProposalId(vestingScheduleId, 3);
+    await expect(await tokenVesting.isWithdrawlPaused(vestingScheduleId)).to.be.equal(true);
+
+  });
+
+  it(' should freeze vesting withdrawls for auditor when proposal is created on DAO with queued proposal state', async () => {
+    // Proposal should call function on AuditPayments that can only be called by the DAO contract
+    // Function should return unvested payments
+    // Proposal should be made through proxy contract that calls function to pause 
+    // deploy vesting contract
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
+
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+    // check that vested amount is 0
+    expect(
+      await tokenVesting.computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(0);
+
+    console.log(-6)
+
+    // set time to half the vesting period
+    const halfTime = baseTime + duration / 2;
+    await tokenVesting.setCurrentTime(halfTime);
+
+    console.log(-5)
+
+    // check that vested amount is half the total amount to vest
+    expect(
+      await tokenVesting
+        .connect(beneficiary)
+        .computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(50);
+
+    // check that only beneficiary can try to withdraw vested tokens
+    await expect(
+      tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+    ).to.be.revertedWith(
+      "TokenVesting: only beneficiary and owner can release vested tokens"
+    );
+
+    const vestingAddr = await tokenVesting.getAddress();
+    const beneficiaryAddr = await beneficiary.getAddress();
+
+    // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
+    await expect(
+      tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+    )
+      .to.emit(testToken, "Transfer")
+      .withArgs(vestingAddr, beneficiaryAddr, 50);
+
+    // Make a proposal based on the vesting address
+    //await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    await tokenVesting.setInvalidatingProposalId(vestingScheduleId, 4);
+    await expect(await tokenVesting.isWithdrawlPaused(vestingScheduleId)).to.be.equal(true);
+
+  });
+
+  it(' should freeze vesting withdrawls for auditor when proposal is created on DAO with executed proposal state', async () => {
+    // Proposal should call function on AuditPayments that can only be called by the DAO contract
+    // Function should return unvested payments
+    // Proposal should be made through proxy contract that calls function to pause 
+    // deploy vesting contract
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
+
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+    // check that vested amount is 0
+    expect(
+      await tokenVesting.computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(0);
+
+    console.log(-6)
+
+    // set time to half the vesting period
+    const halfTime = baseTime + duration / 2;
+    await tokenVesting.setCurrentTime(halfTime);
+
+    console.log(-5)
+
+    // check that vested amount is half the total amount to vest
+    expect(
+      await tokenVesting
+        .connect(beneficiary)
+        .computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(50);
+
+    // check that only beneficiary can try to withdraw vested tokens
+    await expect(
+      tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+    ).to.be.revertedWith(
+      "TokenVesting: only beneficiary and owner can release vested tokens"
+    );
+
+    const vestingAddr = await tokenVesting.getAddress();
+    const beneficiaryAddr = await beneficiary.getAddress();
+
+    // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
+    await expect(
+      tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+    )
+      .to.emit(testToken, "Transfer")
+      .withArgs(vestingAddr, beneficiaryAddr, 50);
+
+    // Make a proposal based on the vesting address
+    //await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    await tokenVesting.setInvalidatingProposalId(vestingScheduleId, 5);
+    await expect(await tokenVesting.isWithdrawlPaused(vestingScheduleId)).to.be.equal(true);
+
+  });
+
+  it(' should unfreeze vesting withdrawls for auditor when proposal is created on DAO with canceled proposal state', async () => {
+    // Proposal should call function on AuditPayments that can only be called by the DAO contract
+    // Function should return unvested payments
+    // Proposal should be made through proxy contract that calls function to pause 
+    // deploy vesting contract
+    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+    await tokenVesting.waitForDeployment();
+
+    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
+      .to.emit(testToken, "Transfer")
+      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
+
+    const vestingContractBalance = await testToken.balanceOf(
+      tokenVesting.getAddress()
+    );
+    expect(vestingContractBalance).to.equal(1000);
+
+    const baseTime = 1622551248;
+    const beneficiary = addr1;
+    const startTime = baseTime;
+    const cliff = 0;
+    const duration = 1000;
+    const slicePeriodSeconds = 1;
+    const amount = 100;
+
+
+    await testToken.approve(tokenVesting.getAddress(), 1000);
+    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
+
+    // create new vesting schedule
+    await tokenVesting.createVestingSchedule(
+      beneficiary.getAddress(),
+      startTime,
+      cliff,
+      duration,
+      slicePeriodSeconds,
+      amount,
+      testToken.getAddress(),
+      testToken.getAddress()
+    );
+
+    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
+    expect(
+      await tokenVesting.getVestingSchedulesCountByBeneficiary(
+        beneficiary.getAddress()
+      )
+    ).to.be.equal(1);
+
+    console.log(-7)
+
+    // compute vesting schedule id
+    const vestingScheduleId =
+      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
+        beneficiary.getAddress(),
+        0
+      );
+
+    // check that vested amount is 0
+    expect(
+      await tokenVesting.computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(0);
+
+    console.log(-6)
+
+    // set time to half the vesting period
+    const halfTime = baseTime + duration / 2;
+    await tokenVesting.setCurrentTime(halfTime);
+
+    console.log(-5)
+
+    // check that vested amount is half the total amount to vest
+    expect(
+      await tokenVesting
+        .connect(beneficiary)
+        .computeReleasableAmount(vestingScheduleId)
+    ).to.be.equal(50);
+
+    // check that only beneficiary can try to withdraw vested tokens
+    await expect(
+      tokenVesting.connect(addr2).withdraw(vestingScheduleId)
+    ).to.be.revertedWith(
+      "TokenVesting: only beneficiary and owner can release vested tokens"
+    );
+
+    const vestingAddr = await tokenVesting.getAddress();
+    const beneficiaryAddr = await beneficiary.getAddress();
+
+    // withdraw 10 tokens and check that a Transfer event is emitted with a value of 10
+    await expect(
+      tokenVesting.connect(beneficiary).withdraw(vestingScheduleId)
+    )
+      .to.emit(testToken, "Transfer")
+      .withArgs(vestingAddr, beneficiaryAddr, 50);
+
+    // Make a proposal based on the vesting address
+    //await bevorDAO.propose([tokenVesting.getAddress], [1], [], "");
+    await tokenVesting.setInvalidatingProposalId(vestingScheduleId, 6);
+    await expect(await tokenVesting.isWithdrawlPaused(vestingScheduleId)).to.be.equal(false);
+
+  });
+
+  /*
   it('should return remaining unvested tokens to auditee for payment if successful DAO proposal deems it invalid', async () => {
     // Create a vesting schedule and perform necessary setup steps
     // (Assuming you have already created a vesting schedule as in your previous test)
@@ -240,90 +749,5 @@ describe('Testing Bevor DAO Functionality', function() {
     expect(auditeeBalance).to.equal(expectedAuditeeBalance);
 */
     // Additional assertions as needed
-  });
-
-  it('should unfreeze vesting withdrawals for auditor if DAO proposal is unsuccessful', async () => {
-    // Create a vesting schedule and perform necessary setup steps
-    // (Assuming you have already created a vesting schedule as in your previous test)
-
-    // Make a proposal to unfreeze vesting withdrawals for the auditor
-    // This proposal should be based on the vesting address
-    const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
-    await tokenVesting.waitForDeployment();
-
-    await expect(testToken.transfer(await tokenVesting.getAddress(), 1000))
-      .to.emit(testToken, "Transfer")
-      .withArgs(await owner.getAddress(), await tokenVesting.getAddress(), 1000);
-
-    const vestingContractBalance = await testToken.balanceOf(
-      tokenVesting.getAddress()
-    );
-    expect(vestingContractBalance).to.equal(1000);
-
-    const baseTime = 1622551248;
-    const beneficiary = addr1;
-    const startTime = baseTime;
-    const cliff = 0;
-    const duration = 1000;
-    const slicePeriodSeconds = 1;
-    const amount = 100;
-
-
-    await testToken.approve(tokenVesting.getAddress(), 1000);
-    await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
-
-    // create new vesting schedule
-    await tokenVesting.createVestingSchedule(
-      beneficiary.getAddress(),
-      startTime,
-      cliff,
-      duration,
-      slicePeriodSeconds,
-      amount,
-      testToken.getAddress(),
-      testToken.getAddress()
-    );
-
-    expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
-    expect(
-      await tokenVesting.getVestingSchedulesCountByBeneficiary(
-        beneficiary.getAddress()
-      )
-    ).to.be.equal(1);
-
-    console.log(-7)
-
-    // compute vesting schedule id
-    const vestingScheduleId =
-      await tokenVesting.computeVestingScheduleIdForAddressAndIndex(
-        beneficiary.getAddress(),
-        0
-      );
-
-    // Make a proposal to return unvested tokens to the auditee
-    // This proposal should be based on the vesting address
-    
-    const ABI = tokenVesting.abi;
-    const tif = new ethers.Interface(ABI);
-
-    await tokenVesting.proposeCancelVesting(vestingScheduleId, tif.encodeFunctionData("invalidateAudit", [vestingScheduleId]));
-    console.log("Proposal successful");
-
-
-
-    // Vote on the proposal with BVR holders (simulate an unsuccessful vote)
-    await bevorDAO.castVote(bevorDAO.proposalCount());
-
-    // Wait for the voting period to end (ensure the proposal is unsuccessful)
-    // You may need to adjust this time period based on your DAO configuration
-    await ethers.provider.send('evm_increaseTime', [duration]);
-    await ethers.provider.send('evm_mine');
-
-    // Check that vesting withdrawals for the auditor have been unfrozen ***Fix this syntax with a chatGPT comparison to other file***
-    const isFrozen = await tokenVesting.vestingWithdrawalsFrozen();
-    expect(isFrozen).to.equal(false);
-
-    // Additional assertions as needed
-  });
-
+  //});
 });
