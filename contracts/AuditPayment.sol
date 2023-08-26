@@ -158,7 +158,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
-    
+    //TODO: Figure out why openzeppelin propose doesn't work 
     function proposeCancelVesting(bytes32 vestingScheduleId, string memory calldata1) public {
         VestingSchedule storage vestingSchedule =
             vestingSchedules[vestingScheduleId];
@@ -188,6 +188,17 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.invalidatingProposalId = dao.propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
 
         console.log("Invalidating Proposal Id: %s", vestingSchedule.invalidatingProposalId);
+    }
+
+    function setInvalidatingProposalId(bytes32 vestingScheduleId, uint256 invalidatingProposalId) external {
+        VestingSchedule storage vestingSchedule =
+            vestingSchedules[vestingScheduleId];
+
+
+        require(vestingSchedule.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
+        require(msg.sender == vestingSchedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
+
+       vestingSchedule.invalidatingProposalId = invalidatingProposalId;
     }
 
     /**
