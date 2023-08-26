@@ -159,24 +159,26 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     }
 
     
-    function proposeCancelVesting(bytes32 vestingScheduleId) public {
+    function proposeCancelVesting(bytes32 vestingScheduleId, bytes[] memory calldatas) public {
         VestingSchedule storage vestingSchedule =
             vestingSchedules[vestingScheduleId];
 
         require(vestingSchedule.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         require(msg.sender == vestingSchedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
 
+        console.log(
+                "%s is proposing vesting schedule is cancelled.",
+                msg.sender
+        );
+
         // Your DAO proposal creation logic might look like this: TODO:
         // Replace the following lines with your actual DAO proposal
         // creation code
         address[] memory targets = new address[](1); 
         uint256[] memory values = new uint256[](1);
-        bytes[] memory calldatas = new bytes[](1);
 
         targets[0] = address(this); 
-        //signatures[0] = "invalidateAudit(bytes32)"; TODO: Figure out how to call invalidateAudit with value 
-        values[0] = 1;
-        calldatas[0] = abi.encode(vestingScheduleId);
+        values[0] = 0;
 
         // Assuming 'dao' is your DAO contract
         vestingSchedule.invalidatingProposalId = dao.propose(targets, values, calldatas, "Proposal to cancel vesting for audit");

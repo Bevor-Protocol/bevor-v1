@@ -1,5 +1,5 @@
 const { expect, assert } = require("chai");
-const { ethers, BigNumber } = require("hardhat");
+const { ethers, BigNumber, Interface } = require("hardhat");
 
 
 describe('Testing Bevor DAO Functionality', function() {
@@ -161,6 +161,7 @@ describe('Testing Bevor DAO Functionality', function() {
     const slicePeriodSeconds = 1;
     const amount = 100;
 
+    const expectedAuditeeBalance = 1000;
 
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
@@ -184,7 +185,7 @@ describe('Testing Bevor DAO Functionality', function() {
       )
     ).to.be.equal(1);
 
-    console.log(-7)
+    console.log("ABI:");
 
     // compute vesting schedule id
     const vestingScheduleId =
@@ -193,11 +194,16 @@ describe('Testing Bevor DAO Functionality', function() {
         0
       );
 
-
-
     // Make a proposal to return unvested tokens to the auditee
     // This proposal should be based on the vesting address
-    await tokenVesting.proposeCancelVesting(vestingScheduleId);
+
+    const ABI = tokenVesting;
+    console.log(ABI);
+
+    //const tif = new ethers.Interface(ABI);
+
+    await tokenVesting.proposeCancelVesting(vestingScheduleId, ABI.encodeFunctionData("invalidateAudit", [vestingScheduleId]));
+    console.log("Proposal successful");
 
     // Vote on the proposal with BVR holders (simulate a successful vote)
     await bevorDAO.castVote(bevorDAO.proposalCount());
@@ -275,11 +281,16 @@ describe('Testing Bevor DAO Functionality', function() {
         0
       );
 
-
-
     // Make a proposal to return unvested tokens to the auditee
     // This proposal should be based on the vesting address
-    await tokenVesting.proposeCancelVesting(vestingScheduleId);
+    
+    const ABI = tokenVesting.abi;
+    const tif = new ethers.Interface(ABI);
+
+    await tokenVesting.proposeCancelVesting(vestingScheduleId, tif.encodeFunctionData("invalidateAudit", [vestingScheduleId]));
+    console.log("Proposal successful");
+
+
 
     // Vote on the proposal with BVR holders (simulate an unsuccessful vote)
     await bevorDAO.castVote(bevorDAO.proposalCount());
