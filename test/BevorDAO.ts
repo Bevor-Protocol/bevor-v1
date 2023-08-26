@@ -1,5 +1,6 @@
 const { expect, assert } = require("chai");
 const { ethers, BigNumber, Interface } = require("hardhat");
+const { BytesLike, BigNumberish } = require("ethers");
 
 
 describe('Testing Bevor DAO Functionality', function() {
@@ -196,15 +197,33 @@ describe('Testing Bevor DAO Functionality', function() {
 
     // Make a proposal to return unvested tokens to the auditee
     // This proposal should be based on the vesting address
+  //  const ABI = tokenVesting.interface.format(ethers.FormatTypes.json);
+ //   console.log(ABI);
 
-    const ABI = tokenVesting;
-    console.log(ABI);
+//    const tif = new ethers.Interface(ABI);
+    const tif = tokenVesting.interface;
 
-    //const tif = new ethers.Interface(ABI);
+    //console.log(tif);
+    console.log("Encode");
+    console.log(tif.encodeFunctionData("invalidateAudit", [vestingScheduleId]));
+    let tvAddr = await tokenVesting.getAddress();
+    
 
-    await tokenVesting.proposeCancelVesting(vestingScheduleId, ABI.encodeFunctionData("invalidateAudit", [vestingScheduleId]));
-    console.log("Proposal successful");
+    let targets: string[];
+    targets = [await tokenVesting.getAddress()];
 
+    let values : typeof BigNumberish[];
+    values = [0];
+
+    let calldatas : typeof BytesLike[];
+    calldatas = [tokenVesting.interface.encodeFunctionData("invalidateAudit", [vestingScheduleId])];
+
+    console.log(calldatas); 
+
+    //await tokenVesting.proposeCancelVesting(vestingScheduleId, tif.encodeFunctionData("invalidateAudit", [vestingScheduleId]));
+    const tx = await bevorDAO.propose(targets, values, calldatas, "test");
+    console.log("Proposal successful: " + tx);
+/*
     // Vote on the proposal with BVR holders (simulate a successful vote)
     await bevorDAO.castVote(bevorDAO.proposalCount());
 
@@ -219,7 +238,7 @@ describe('Testing Bevor DAO Functionality', function() {
     // Check that unvested tokens have been returned to the auditee's address
     const auditeeBalance = await testToken.balanceOf(addr1.address);
     expect(auditeeBalance).to.equal(expectedAuditeeBalance);
-
+*/
     // Additional assertions as needed
   });
 

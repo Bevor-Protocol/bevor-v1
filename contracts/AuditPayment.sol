@@ -159,7 +159,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     }
 
     
-    function proposeCancelVesting(bytes32 vestingScheduleId, bytes[] memory calldatas) public {
+    function proposeCancelVesting(bytes32 vestingScheduleId, string memory calldata1) public {
         VestingSchedule storage vestingSchedule =
             vestingSchedules[vestingScheduleId];
 
@@ -168,7 +168,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
 
         console.log(
                 "%s is proposing vesting schedule is cancelled.",
-                msg.sender
+                address(this) 
         );
 
         // Your DAO proposal creation logic might look like this: TODO:
@@ -176,12 +176,18 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // creation code
         address[] memory targets = new address[](1); 
         uint256[] memory values = new uint256[](1);
+        bytes[] memory calldatas = new bytes[](1);
 
         targets[0] = address(this); 
         values[0] = 0;
+        calldatas[0] = bytes(calldata1);
+
+        console.log("All of the above variables workd");
 
         // Assuming 'dao' is your DAO contract
         vestingSchedule.invalidatingProposalId = dao.propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
+
+        console.log("Invalidating Proposal Id: %s", vestingSchedule.invalidatingProposalId);
     }
 
     /**
