@@ -144,6 +144,10 @@ contract AuditPayment is Ownable, ReentrancyGuard {
 
         // Reveal audit metadata once payment starts
         // TODO: Make sure that this can be called by the contract not msg.sender [FIX THIS]
+        // TODO
+        // Only allow NFT to be minted from this contract by making it the owner of the contract
+        // TODO: Make sure that this can be called by the contract not msg.sender [FIX THIS]
+        // Make the tokenID of the NFT contract the hashed details that are being set in this function.
         //audit.trustlessHandoff(_auditor, msg.sender, _tokenId);
     }
 
