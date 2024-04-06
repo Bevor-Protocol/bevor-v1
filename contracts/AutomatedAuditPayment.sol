@@ -87,7 +87,7 @@ contract AutomatedAuditPayment {
     function calculateVestedAmountAutomatically() external {
         require(block.timestamp >= vestingStartTime, "Vesting period has not started");
 
-        uint256 usdcPrice = getUSDCPrice();
+        // uint256 usdcPrice = getUSDCPrice();
         uint256 elapsedSeconds = block.timestamp - vestingStartTime;
         uint256 vestedAmount = (totalAmount * elapsedSeconds) / vestingPeriod;
 

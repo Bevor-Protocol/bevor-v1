@@ -11,6 +11,8 @@ import "hardhat/console.sol";
 import "./IAudit.sol";
 import "./IBevorDAO.sol";
 import "./BevorDAO.sol";
+import "./DAOProxy.sol";
+import "./IDAOProxy.sol";
 
 /**
  * @title AuditPayment
@@ -44,8 +46,8 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     bytes32[] public vestingSchedulesIds;
     mapping(bytes32 => VestingSchedule) public vestingSchedules;
     mapping(address => uint256) public holdersVestingCount;
-    IAudit public audit;
-    BevorDAO public dao;
+    address public audit;
+    address public dao;
 
     enum ProposalState {
         Pending,
@@ -62,7 +64,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
      */
-    constructor(BevorDAO dao_, IAudit audit_) {
+    constructor(address dao_, address audit_) {
         // Check that the token address is not 0x0.
         require(address(dao_) != address(0x0));
         require(address(audit_) != address(0x0));
@@ -158,6 +160,8 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             vestingScheduleId
         ];
 
+        require(IDAOProxy(dao).isVestingInvalidated(vestingSchedule.invalidatingProposalId), "Cannot invalidate vesting schedule if proposal is not passed");
+
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         if (vestedAmount > 0) {
             vestingSchedule.withdrawn += vestedAmount;
@@ -169,7 +173,6 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         vestingSchedule.token.transfer(vestingSchedule.auditee, returnTotalAmount);
     }
 
-    //TODO: Figure out why openzeppelin propose doesn't work 
     function proposeCancelVesting(bytes32 vestingScheduleId, string memory calldata1) public {
         VestingSchedule storage vestingSchedule =
             vestingSchedules[vestingScheduleId];
@@ -196,11 +199,12 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         console.log("All of the above variables workd");
 
         // Assuming 'dao' is your DAO contract
-        vestingSchedule.invalidatingProposalId = dao.propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
+        vestingSchedule.invalidatingProposalId = IDAOProxy(dao).propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
 
         console.log("Invalidating Proposal Id: %s", vestingSchedule.invalidatingProposalId);
     }
 
+    // TODO: Figure out a way to have this set automatically when a proposal is created
     function setInvalidatingProposalId(bytes32 vestingScheduleId, uint256 invalidatingProposalId) external {
         VestingSchedule storage vestingSchedule =
             vestingSchedules[vestingScheduleId];
@@ -218,25 +222,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     function isWithdrawlPaused(bytes32 vestingScheduleId) public view returns (bool) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
 
-        if (vestingSchedule.invalidatingProposalId != 0) {
-            console.log("Enum one: %s vs. two: %s", uint256(IGovernor.ProposalState.Pending), uint256(dao.state(vestingSchedule.invalidatingProposalId)));
-
-            // (vestingSchedule.auditee == dao.proposalProposer(vestingSchedule.invalidatingProposalId)) && 
-
-            return uint256(dao.state(vestingSchedule.invalidatingProposalId)) == uint256(IGovernor.ProposalState.Pending);
- 
-
-           /*return (vestingSchedule.auditee == dao.proposalProposer(vestingSchedule.invalidatingProposalId)) && 
-               (dao.state(vestingSchedule.invalidatingProposalId) == dao.propState()) ||
-                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Active() ||
-                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Succeeded() ||
-                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Queued() ||
-                dao.state(vestingSchedule.invalidatingProposalId) == dao.propState.Executed()
-                ); 
-              */ 
-        } else {
-            return false;
-        } 
+        return IDAOProxy(dao).isWithdrawFrozen(vestingSchedule.invalidatingProposalId);
     }
 
     /**
@@ -251,15 +237,22 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             vestingScheduleId
         ];
 
-        require(!isWithdrawlPaused(vestingScheduleId), "Vesting is paused due to pending proposal cannot withdraw tokens");
-       
         bool isBeneficiary = msg.sender == vestingSchedule.auditor;
 
         bool isReleasor = (msg.sender == owner());
+
         require(
             isBeneficiary || isReleasor,
             "TokenVesting: only beneficiary and owner can release vested tokens"
         );
+
+        console.log(
+                "Is withdrawl frozen?: %s",
+                isWithdrawlPaused(vestingScheduleId)
+        ); 
+
+        require(!IDAOProxy(dao).isWithdrawFrozen(vestingSchedule.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+       
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         vestingSchedule.withdrawn += vestedAmount;
 
