@@ -6,7 +6,7 @@ async function main() {
 
   const Token = await ethers.getContractFactory("ERC20Token");
   const TL = await ethers.getContractFactory("BevorTimelockController");
-  const DAO = await ethers.getContractFactory("BevorDAO");
+  const DAOProxy = await ethers.getContractFactory("DAOProxy");
   const Audit = await ethers.getContractFactory("Audit");
   const TokenVesting = await ethers.getContractFactory("MockAuditPayment");
 
@@ -14,11 +14,13 @@ async function main() {
   await testToken.waitForDeployment();
   const timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
   await timelock.waitForDeployment();
-  const bevorDAO = await DAO.deploy(testToken.getAddress(), timelock.getAddress());
-  await bevorDAO.waitForDeployment();
+  //const bevorDAO = await DAO.deploy(testToken.getAddress(), timelock.getAddress());
+  //await bevorDAO.waitForDeployment();
+  const daoProxy = await DAOProxy.deploy();
+  await daoProxy.waitForDeployment();
   const auditNFT = await Audit.deploy();
   await auditNFT.waitForDeployment();
-  const tokenVesting = await TokenVesting.deploy(bevorDAO.getAddress(), auditNFT.getAddress());
+  const tokenVesting = await TokenVesting.deploy(daoProxy.getAddress(), auditNFT.getAddress());
   await tokenVesting.waitForDeployment();
 }
 

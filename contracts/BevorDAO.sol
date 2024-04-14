@@ -50,7 +50,7 @@ contract BevorDAO is Governor, GovernorSettings, GovernorCountingSimple, Governo
     // Mock state to return different proposal conditions
     function state(uint256 proposalId)
         public
-        view
+        pure
         override(Governor, GovernorTimelockControl)
         returns (ProposalState)
     {
