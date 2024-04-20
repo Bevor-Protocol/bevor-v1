@@ -90,56 +90,60 @@ contract AuditPayment is Ownable, ReentrancyGuard {
 
     /**
      * @notice Creates a new vesting schedule for a beneficiary.
-     * @param _auditor address of the beneficiary to whom vested tokens are transferred
-     * @param _start start time of the vesting period
-     * @param _cliff duration in seconds of the cliff in which tokens will begin to vest
-     * @param _duration duration in seconds of the period in which the tokens will vest
+     * @param auditors addresses of the beneficiaries to whom vested tokens are transferred
+     * @param start start time of the vesting period
+     * @param cliff duration in seconds of the cliff in which tokens will begin to vest
+     * @param duration duration in seconds of the period in which the tokens will vest
      */
     function createVestingSchedule(
-        address _auditor,
-        uint256 _start,
-        uint256 _cliff,
-        uint256 _duration,
-        uint256 _slicePeriodSeconds,
-        uint256 _amount,
-        ERC20 _token,
-        uint256 _tokenId
+        address[] memory auditors,
+        uint256 start,
+        uint256 cliff,
+        uint256 duration,
+        uint256 slicePeriodSeconds,
+        uint256 amount,
+        ERC20 token,
+        uint256 tokenId
     ) external onlyOwner {
-        _token.transferFrom(msg.sender, address(this), _amount);
+        token.transferFrom(msg.sender, address(this), amount);
 
         require(
-            _token.balanceOf(address(this)) >= _amount,
+            token.balanceOf(address(this)) >= amount,
             "TokenVesting: cannot create vesting schedule because not sufficient tokens"
         );
-        require(_duration > 0, "TokenVesting: duration must be > 0");
-        require(_amount > 0, "TokenVesting: amount must be > 0");
+        require(duration > 0, "TokenVesting: duration must be > 0");
+        require(amount > 0, "TokenVesting: amount must be > 0");
         require(
-            _slicePeriodSeconds >= 1,
+            slicePeriodSeconds >= 1,
             "TokenVesting: slicePeriodSeconds must be >= 1"
         );
-        require(_duration >= _cliff, "TokenVesting: duration must be >= cliff");
-        bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(
-            _auditor
-        );
-        uint256 cliff = _start + _cliff;
+        require(duration >= cliff, "TokenVesting: duration must be >= cliff");
+        uint256 cliff_time = start + cliff;
 
-        vestingSchedules[vestingScheduleId] = VestingSchedule(
-            _auditor,
-            msg.sender,
-            cliff,
-            _start,
-            _duration,
-            _slicePeriodSeconds,
-            0,
-            _amount,
-            0,
-            _token,
-            _tokenId
-        );
+        for (uint256 i = 0; i < auditors.length; i++) {
+            address auditor = auditors[i];
+            bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(
+                auditor
+            );
 
-        vestingSchedulesIds.push(vestingScheduleId);
-        uint256 currentVestingCount = holdersVestingCount[_auditor];
-        holdersVestingCount[_auditor] = currentVestingCount + 1;
+            vestingSchedules[vestingScheduleId] = VestingSchedule(
+                auditor,
+                msg.sender,
+                cliff_time,
+                start,
+                duration,
+                slicePeriodSeconds,
+                0,
+                amount / auditors.length,
+                0,
+                token,
+                tokenId
+            );
+
+            vestingSchedulesIds.push(vestingScheduleId);
+            uint256 currentVestingCount = holdersVestingCount[auditor];
+            holdersVestingCount[auditor] = currentVestingCount + 1;
+        }
 
         // Revert if audit nft does not exist (probably do this is NFT contract)
         //require(audit.ownerOf(_tokenId) == _auditor, "Audit NFT is not owned by caller");
