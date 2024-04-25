@@ -24,6 +24,7 @@ const config: HardhatUserConfig = {
         count: 20,
         passphrase: "",
       },
+      chainId: 1337,
     },
     hardhat: {
       accounts: {
@@ -32,6 +33,7 @@ const config: HardhatUserConfig = {
         count: 20,
         passphrase: "",
       },
+      chainId: 1337,
     }
   },
 };
