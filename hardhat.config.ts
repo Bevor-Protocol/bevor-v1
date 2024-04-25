@@ -20,7 +20,6 @@ const config: HardhatUserConfig = {
       url: "http://127.0.0.1:8545",
       accounts: {
         mnemonic: "wasp cinnamon scissors pepper push battle danger similar axis occur behind turn",
-        path: "m/44'/2002'/0'/0'",
         initialIndex: 0,
         count: 20,
         passphrase: "",
@@ -29,7 +28,6 @@ const config: HardhatUserConfig = {
     hardhat: {
       accounts: {
         mnemonic: "wasp cinnamon scissors pepper push battle danger similar axis occur behind turn",
-        path: "m/44'/2002'/0'/0'",
         initialIndex: 0,
         count: 20,
         passphrase: "",
