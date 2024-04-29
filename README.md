@@ -7,3 +7,17 @@ Bevor is a decentralized (semi) permission-less protocol and DAO that creates lo
 ```shell
 npx hardhat test
 ```
+
+**To run this locally:**
+
+Start the local HTTP and WebSocket JSON RPC node
+```shell
+npx hardhat node
+```
+This will output the test wallet addresses. They'll be fixed as we set a mnemonic.
+
+In a new terminal, run the deploy script to localhost
+```shell
+npx hardhat run scripts/deploy.ts --network localhost
+```
+This will output the contract addresses to the same terminal where the local node is running.
