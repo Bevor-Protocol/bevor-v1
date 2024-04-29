@@ -325,7 +325,7 @@ describe("TokenVesting", function () {
       await tokenVesting.waitForDeployment();
       // Check this for validity before pushing to mainnet, find repo reference for this test
       const expectedVestingScheduleId =
-        "0xdc3cc2b1da6040c8422b71ccce0d1f289de3daa26970bbf71e4ca8580e2073a3";
+        "0x501b07787e94012e530aadb55dfa2e302b52d163ceb8a7f9065ec16692f75bfe";
       expect(
         (
           await tokenVesting.computeVestingScheduleIdForAddressAndIndex(

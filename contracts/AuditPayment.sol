@@ -60,6 +60,18 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         Executed
     }
 
+    event VestingScheduleCreated(
+        address indexed auditor,
+        address indexed auditee,
+        uint256 cliff,
+        uint256 start,
+        uint256 duration,
+        uint256 slicePeriodSeconds,
+        uint256 amountTotal,
+        ERC20 token,
+        uint256 tokenId
+    );
+
     /**
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
@@ -144,6 +156,17 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             uint256 currentVestingCount = holdersVestingCount[auditor];
             holdersVestingCount[auditor] = currentVestingCount + 1;
         }
+        emit VestingScheduleCreated(
+            auditors[0],
+            msg.sender,
+            cliff_time,
+            start,
+            duration,
+            slicePeriodSeconds,
+            amount,
+            token,
+            tokenId
+        );
 
         // Revert if audit nft does not exist (probably do this is NFT contract)
         //require(audit.ownerOf(_tokenId) == _auditor, "Audit NFT is not owned by caller");
