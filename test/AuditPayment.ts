@@ -39,6 +39,9 @@ describe("TokenVesting", function () {
     await daoProxy.waitForDeployment();
     auditNFT = await Audit.deploy();
     await auditNFT.waitForDeployment();
+
+    await auditNFT.createAudit("a", 123);
+    await auditNFT.mint(addr1, "a", "b", 123, 321);
   });
 
   describe("Vesting", function () {
@@ -89,6 +92,8 @@ describe("TokenVesting", function () {
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+    let tokenId = await auditNFT.generateProof("b", 321);
+
       // create new vesting schedule
       await tokenVesting.createVestingSchedule(
         [beneficiary.getAddress()],
@@ -98,7 +103,7 @@ describe("TokenVesting", function () {
         slicePeriodSeconds,
         amount,
         testToken.getAddress(),
-        testToken.getAddress()
+        tokenId
       );
 
       expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
@@ -259,7 +264,7 @@ describe("TokenVesting", function () {
 
     it("Should withdraw vested tokens if revoked", async function () {
       // deploy vesting contract
-      const tokenVesting = await TokenVesting.deploy(daoProxy.getAddress(), auditNFT.getAddress());
+      const tokenVesting = await TokenVesting.deploy(auditNFT.getAddress(), daoProxy.getAddress());
       await tokenVesting.waitForDeployment();
       
       const tokenAddr = await tokenVesting.getAddress();
@@ -283,6 +288,10 @@ describe("TokenVesting", function () {
       await testToken.approve(tokenVesting.getAddress(), 1000);
       await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+      let tokenId = await auditNFT.generateProof("b", 321);
+
+      console.log("OWNER: " + await auditNFT.ownerOf(tokenId));
+
       // create new vesting schedule
       await tokenVesting.createVestingSchedule(
         [beneficiary.getAddress()],
@@ -292,7 +301,7 @@ describe("TokenVesting", function () {
         slicePeriodSeconds,
         amount,
         testToken.getAddress(),
-        testToken.getAddress()
+        tokenId
       );
 
       // compute vesting schedule id
@@ -352,6 +361,8 @@ describe("TokenVesting", function () {
       await testToken.approve(tokenVesting.getAddress(), 1000);
       await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+      let tokenId = await auditNFT.generateProof("b", 321);
+
       // Nondescript error not happening up to this point
       await expect(
         tokenVesting.createVestingSchedule(
@@ -362,7 +373,7 @@ describe("TokenVesting", function () {
           1,
           1,
           testToken.getAddress(),
-          testToken.getAddress()
+          tokenId
         )
       ).to.be.revertedWith("TokenVesting: duration must be > 0");
       await expect(
@@ -374,7 +385,7 @@ describe("TokenVesting", function () {
           0,
           1,
           testToken.getAddress(),
-          testToken.getAddress()
+          tokenId
         )
       ).to.be.revertedWith("TokenVesting: slicePeriodSeconds must be >= 1");
       
@@ -387,7 +398,7 @@ describe("TokenVesting", function () {
           1,
           0,
           testToken.getAddress(),
-          testToken.getAddress()
+          tokenId
         )
       ).to.be.revertedWith("TokenVesting: amount must be > 0");
     });
@@ -423,6 +434,8 @@ describe("TokenVesting", function () {
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+    let tokenId = await auditNFT.generateProof("b", 321);
+
     // create new vesting schedule
     await tokenVesting.createVestingSchedule(
       [beneficiary.getAddress()],
@@ -432,7 +445,7 @@ describe("TokenVesting", function () {
       slicePeriodSeconds,
       amount,
       testToken.getAddress(),
-      testToken.getAddress()
+      tokenId
     );
 
     expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
@@ -525,6 +538,8 @@ describe("TokenVesting", function () {
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+    let tokenId = await auditNFT.generateProof("b", 321);
+
     // create new vesting schedule
     await tokenVesting.createVestingSchedule(
       [beneficiary.getAddress()],
@@ -534,7 +549,7 @@ describe("TokenVesting", function () {
       slicePeriodSeconds,
       amount,
       testToken.getAddress(),
-      testToken.getAddress()
+      tokenId
     );
 
     expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
@@ -627,6 +642,8 @@ describe("TokenVesting", function () {
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+    let tokenId = await auditNFT.generateProof("b", 321);
+
     // create new vesting schedule
     await tokenVesting.createVestingSchedule(
       [beneficiary.getAddress()],
@@ -636,7 +653,7 @@ describe("TokenVesting", function () {
       slicePeriodSeconds,
       amount,
       testToken.getAddress(),
-      testToken.getAddress()
+      tokenId
     );
 
     expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(1);
@@ -744,6 +761,8 @@ describe("TokenVesting", function () {
     await testToken.approve(tokenVesting.getAddress(), 1000);
     await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
+    let tokenId = await auditNFT.generateProof("b", 321);
+
       // create new vesting schedule
       await tokenVesting.createVestingSchedule(
         [beneficiaries[0].getAddress(), beneficiaries[1].getAddress(), beneficiaries[2].getAddress()],
@@ -753,7 +772,7 @@ describe("TokenVesting", function () {
         slicePeriodSeconds,
         amount,
         testToken.getAddress(),
-        testToken.getAddress()
+        tokenId
       );
 
       expect(await tokenVesting.getVestingSchedulesCount()).to.be.equal(3);

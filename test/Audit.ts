@@ -58,13 +58,16 @@ describe("AuditNFT Functionality", function () {
         await testToken.approve(tokenVesting.getAddress(), 1000);
         await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
-        await auditNFT.mint(addr1);
+        await auditNFT.createAudit("a", 123);
+        await auditNFT.mint(addr1, "a", "b", 123, 321);
 
-        expect(await auditNFT.tokenURI(1)).to.equal('https://api.bevor.io/1');
+        let tokenId = await auditNFT.generateProof("b", 321);
 
-        await auditNFT.connect(addr1).trustlessHandoff(addr1, owner, 1);
+        expect(await auditNFT.tokenURI(tokenId)).to.equal(`https://api.bevor.io/${tokenId}`);
 
-        expect(await auditNFT.tokenURI(1)).to.equal('https://ipfs.io/ipfs/1');
+        await auditNFT.connect(addr1).trustlessHandoff(addr1, owner, tokenId);
+
+        expect(await auditNFT.tokenURI(tokenId)).to.equal(`https://ipfs.io/ipfs/${tokenId}`);
     });
 
     it('Audit should change hands after trustless handoff', async () => {
@@ -83,11 +86,14 @@ describe("AuditNFT Functionality", function () {
         await testToken.approve(tokenVesting.getAddress(), 1000);
         await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
-        await auditNFT.mint(addr1);
+        await auditNFT.createAudit("a", 123);
+        await auditNFT.mint(addr1, "a", "b", 123, 321);
 
-        await auditNFT.connect(addr1).trustlessHandoff(addr1, owner, 1);
+        let tokenId = await auditNFT.generateProof("b", 321);
 
-        expect(await auditNFT.ownerOf(1)).to.equal(await owner.getAddress());
+        await auditNFT.connect(addr1).trustlessHandoff(addr1, owner, tokenId);
+
+        expect(await auditNFT.ownerOf(tokenId)).to.equal(await owner.getAddress());
     });
 
     it('Trustless handoff should only be triggerable by auditor or by vesting contract', async () => {
@@ -106,12 +112,17 @@ describe("AuditNFT Functionality", function () {
         await testToken.approve(tokenVesting.getAddress(), 1000);
         await auditNFT.connect(addr1).setApprovalForAll(tokenVesting.getAddress(), true);
 
-        await auditNFT.mint(addr1);
+        await auditNFT.createAudit("a", 123);
+        await auditNFT.mint(addr1, "a", "b", 123, 321);
 
-        expect(auditNFT.connect(owner).trustlessHandoff(addr1, owner, 1)).to.be.revertedWith("ERC721: transfer from incorrect owner");
+        let tokenId = await auditNFT.generateProof("b", 321);
+
+        expect(auditNFT.connect(owner).trustlessHandoff(addr1, owner, tokenId)).to.be.revertedWith("ERC721: transfer from incorrect owner");
 
         //Add other test cases here as they arise
     });
+
+    // Add tests to ensure minting cannot happen before audit is created
   });
 
 });
