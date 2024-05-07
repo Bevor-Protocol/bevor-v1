@@ -9,11 +9,26 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import "./ISmartAgreement.sol";
 
 contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
+    struct AuditInfo {
+        // Hashed details of the audit
+        string details;
+        // Hashed findings of the audit
+        string findings;
+        // Auditor of the NFT 
+        address auditor;
+    }
+
     address[] internal _test;
     uint256 public maxTokensPerWallet = 100;
-    uint256 _tokenId = 0;
 
+    mapping(uint256 => AuditInfo) public audits;
     mapping(uint256 => bool) public auditRevealed;
+
+    /**
+     * @dev Emitted when an audit is created with a unique identifier.
+     * @param auditId The unique identifier for the audit.
+     */
+    event AuditCreated(uint256 indexed auditId);
 
 
     constructor() ERC721("BevorAuditDeliverable", "BAD") { }
@@ -26,9 +41,19 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         return ERC2771Recipient._msgData();
     }
 
-    function mint(address _to) public onlyOwner() {
-        _tokenId += 1;
-        _mint(_to, _tokenId);
+    function createAudit(string memory details, uint256 salt) public onlyOwner() {
+        uint256 auditId = generateProof(details, salt);
+        audits[auditId] = AuditInfo(details, "", _msgSender());
+        emit AuditCreated(auditId);
+    }
+
+    function mint(address _to, string memory details, string memory findings, uint256 dSalt, uint256 fSalt) public onlyOwner() {
+        uint256 auditId = generateProof(details, dSalt);
+        require(audits[auditId].auditor == _msgSender(), "Only the auditor can mint this NFT");
+        require(keccak256(abi.encodePacked(audits[auditId].details)) != keccak256(abi.encodePacked("")), "Audit ID does not exist");
+
+        uint256 tokenId = generateProof(findings, fSalt);
+        _mint(_to, tokenId);
     }
 
     function _beforeTokenTransfer(

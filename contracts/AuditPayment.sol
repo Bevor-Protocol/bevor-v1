@@ -40,7 +40,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         // address of the ERC20 token vesting
         ERC20 token;
         // address of the ERC721 audit NFT
-        uint256 tokenId;
+        uint256 auditTokenId;
     }
 
     bytes32[] public vestingSchedulesIds;
@@ -118,7 +118,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 tokenId
     ) external onlyOwner {
         token.transferFrom(msg.sender, address(this), amount);
-
+        
         require(
             token.balanceOf(address(this)) >= amount,
             "TokenVesting: cannot create vesting schedule because not sufficient tokens"
@@ -130,6 +130,9 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             "TokenVesting: slicePeriodSeconds must be >= 1"
         );
         require(duration >= cliff, "TokenVesting: duration must be >= cliff");
+
+        require(IAudit(audit).ownerOf(tokenId) != address(0), "TokenVesting: tokenId does not exist in NFT contract");
+
         uint256 cliff_time = start + cliff;
 
         for (uint256 i = 0; i < auditors.length; i++) {
@@ -156,6 +159,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             uint256 currentVestingCount = holdersVestingCount[auditor];
             holdersVestingCount[auditor] = currentVestingCount + 1;
         }
+        
         emit VestingScheduleCreated(
             auditors[0],
             msg.sender,
