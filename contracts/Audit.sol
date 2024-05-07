@@ -11,11 +11,11 @@ import "./ISmartAgreement.sol";
 contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
     struct AuditInfo {
         // Hashed details of the audit
-        string details;
+        uint256 details;
         // Hashed findings of the audit
-        string findings;
+        uint256 findings;
         // Auditor of the NFT 
-        address auditor;
+        address auditee;
     }
 
     address[] internal _test;
@@ -41,18 +41,15 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         return ERC2771Recipient._msgData();
     }
 
-    function createAudit(string memory details, uint256 salt) public onlyOwner() {
-        uint256 auditId = generateProof(details, salt);
-        audits[auditId] = AuditInfo(details, "", _msgSender());
+    function createAudit(uint256 auditId) public onlyOwner() {
+        audits[auditId] = AuditInfo(auditId, 0, _msgSender());
         emit AuditCreated(auditId);
     }
 
-    function mint(address _to, string memory details, string memory findings, uint256 dSalt, uint256 fSalt) public onlyOwner() {
-        uint256 auditId = generateProof(details, dSalt);
-        require(audits[auditId].auditor == _msgSender(), "Only the auditor can mint this NFT");
+    function mint(address _to, uint256 auditId, uint256 tokenId) public onlyOwner() {
+        require(audits[auditId].auditee == _msgSender(), "Only the auditee can mint this NFT");
         require(keccak256(abi.encodePacked(audits[auditId].details)) != keccak256(abi.encodePacked("")), "Audit ID does not exist");
 
-        uint256 tokenId = generateProof(findings, fSalt);
         _mint(_to, tokenId);
     }
 
@@ -97,6 +94,100 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
     function trustlessHandoff(address from, address to, uint256 tokenId) public {
         auditRevealed[tokenId] = true;
         transferFrom(from, to, tokenId);
+    }
+
+    /**
+     * @dev Generates a Proof Of Integrity as the keccak256 hash of the concatenated string of all vesting fields.
+     * @param auditors The addresses of the auditors.
+     * @param auditee The address of the auditee.
+     * @param cliff The cliff period in seconds.
+     * @param start The start time of the vesting period.
+     * @param duration The duration of the vesting period in seconds.
+     * @param slicePeriodSeconds The duration of a slice period for the vesting in seconds.
+     * @param invalidatingProposalId The ID of the proposal that can invalidate the vesting.
+     * @param amountTotal The total amount of tokens to be released at the end of the vesting.
+     * @param withdrawn The amount of tokens already withdrawn.
+     * @param token The address of the ERC20 token being vested.
+     * @param auditTokenId The ID of the associated ERC721 audit NFT.
+     * @return The keccak256 hash of the concatenated vesting data.
+     */
+    function generateAuditId(
+        address[] memory auditors,
+        address auditee,
+        string memory details,
+        uint256 cliff,
+        uint256 start,
+        uint256 duration,
+        uint256 slicePeriodSeconds,
+        uint256 invalidatingProposalId,
+        uint256 amountTotal,
+        uint256 withdrawn,
+        address token,
+        uint256 auditTokenId,
+        uint256 salt
+    ) public pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(
+            auditors,
+            auditee,
+            details,
+            cliff,
+            start,
+            duration,
+            slicePeriodSeconds,
+            invalidatingProposalId,
+            amountTotal,
+            withdrawn,
+            token,
+            auditTokenId,
+            salt
+        )));
+    }
+
+    /**
+     * @dev Generates a Proof Of Integrity as the keccak256 hash of the concatenated string of all vesting fields.
+     * @param auditors The addresses of the auditors.
+     * @param auditee The address of the auditee.
+     * @param cliff The cliff period in seconds.
+     * @param start The start time of the vesting period.
+     * @param duration The duration of the vesting period in seconds.
+     * @param slicePeriodSeconds The duration of a slice period for the vesting in seconds.
+     * @param invalidatingProposalId The ID of the proposal that can invalidate the vesting.
+     * @param amountTotal The total amount of tokens to be released at the end of the vesting.
+     * @param withdrawn The amount of tokens already withdrawn.
+     * @param token The address of the ERC20 token being vested.
+     * @param auditTokenId The ID of the associated ERC721 audit NFT.
+     * @return The keccak256 hash of the concatenated vesting data.
+     */
+    function generateTokenId(
+        address[] memory auditors,
+        address auditee,
+        string memory findings,
+        uint256 cliff,
+        uint256 start,
+        uint256 duration,
+        uint256 slicePeriodSeconds,
+        uint256 invalidatingProposalId,
+        uint256 amountTotal,
+        uint256 withdrawn,
+        address token,
+        uint256 auditTokenId,
+        uint256 salt
+    ) public pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(
+            auditors,
+            auditee,
+            findings,
+            cliff,
+            start,
+            duration,
+            slicePeriodSeconds,
+            invalidatingProposalId,
+            amountTotal,
+            withdrawn,
+            token,
+            auditTokenId,
+            salt
+        )));
     }
 
     /**
