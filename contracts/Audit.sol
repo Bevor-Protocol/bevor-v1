@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "hardhat/console.sol";
 import "./ISmartAgreement.sol";
 import "./IAuditPayment.sol";
 
@@ -83,11 +84,11 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
 
         // putting more information in the struct allows us to access it later in mint()
         // without passing repetitive parameters.
-        audits[auditId] = AuditInfo(_msgSender(), auditors, cliff, duration, slicePeriodSeconds, amountTotal, token);
+        audits[auditId] = AuditInfo(_msgSender(), auditors, cliff, duration, slicePeriodSeconds, amountTotal, token);        
         emit AuditCreated(auditId);
     }
 
-    function mint(address _to, uint256 auditId, string[] memory findings, address[] memory auditors, uint256 salt) public {
+    function mint(address _to, uint256 auditId, string[] memory findings, address[] memory auditors, uint256 salt) public {        
         require(audits[auditId].auditee == _to, "Only the auditee can mint this NFT");
         require(audits[auditId].auditors.length == auditors.length, "Mismatch in number of auditors");
         require(audits[auditId].auditors.length == findings.length, "Mismatch in number of findings");

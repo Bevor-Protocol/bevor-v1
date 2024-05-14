@@ -94,7 +94,9 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             _;
     }
 
-    function setAuditContract(address _auditContract) external onlyOwner {
+    function setAuditContract(address _auditContract) external {
+      require(msg.sender == _auditContract, "not called from source contract");
+      require(tx.origin == owner(), "not the same owner");
       audit = _auditContract;
     }
 
@@ -167,6 +169,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             );
 
             vestingSchedulesIds.push(vestingScheduleId);
+            console.log(uint256(vestingScheduleId));
             uint256 currentVestingCount = holdersVestingCount[auditor];
             holdersVestingCount[auditor] = currentVestingCount + 1;
 

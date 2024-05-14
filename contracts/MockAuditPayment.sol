@@ -12,7 +12,7 @@ import "./DAOProxy.sol";
 contract MockAuditPayment is AuditPayment {
     uint256 mockTime = 0;
 
-    constructor(address audit_, address dao_) AuditPayment(dao_, audit_) {}
+    constructor(address dao_) AuditPayment(dao_) {}
 
     function setCurrentTime(uint256 _time) external {
         mockTime = _time;
