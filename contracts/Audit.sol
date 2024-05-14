@@ -46,6 +46,7 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
     constructor(address vesting_) ERC721("BevorAuditDeliverable", "BAD") {
       require(address(vesting_) != address(0x0));
       vesting = vesting_;
+      IAuditPayment(vesting).setAuditContract(address(this));
     }
 
     function _msgSender() internal view override(Context, ERC2771Recipient) returns (address sender) {
@@ -64,7 +65,7 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
       uint256 slicePeriodSeconds,
       uint256 amountTotal,
       ERC20 token,
-      uint256 salt) public onlyOwner() {
+      uint256 salt) public {
         require(bytes(details).length > 0, "details must be provided");
         require(auditors.length > 0, "at least 1 auditor must be provided");
 
@@ -86,7 +87,7 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         emit AuditCreated(auditId);
     }
 
-    function mint(address _to, uint256 auditId, string[] memory findings, address[] memory auditors, uint256 salt) public onlyOwner() {
+    function mint(address _to, uint256 auditId, string[] memory findings, address[] memory auditors, uint256 salt) public {
         require(audits[auditId].auditee == _to, "Only the auditee can mint this NFT");
         require(audits[auditId].auditors.length == auditors.length, "Mismatch in number of auditors");
         require(audits[auditId].auditors.length == findings.length, "Mismatch in number of findings");
@@ -102,7 +103,8 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
           salt
         );
 
-        IAuditPayment(vesting).createVestingSchedule(
+        IAuditPayment(vesting).createVestingSchedules(
+          _msgSender(),
           audits[auditId].auditors,
           block.timestamp,
           audits[auditId].cliff,
