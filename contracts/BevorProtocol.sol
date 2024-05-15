@@ -158,13 +158,14 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
           uint256 vestingScheduleId = computeNextVestingScheduleIdForHolder(auditor);
           uint256 currentVestingCount = holdersVestingCount[auditor];
           holdersVestingCount[auditor] = currentVestingCount + 1;
+          vestingSchedulesIds.push(vestingScheduleId);
           
           auditorArr[i] = vestingScheduleId;
 
           vestingSchedules[vestingScheduleId] = VestingSchedule(
             auditor,
-            0,
             amount / auditors.length,
+            0,
             auditId
           );
         }
@@ -243,7 +244,6 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         require(schedules.length == auditors.length, "incorrect number of auditors passed");
         require(!targetAudit.isActive, "audit schedule is already active");
 
-        targetAudit.isActive = true;
         targetAudit.token.transferFrom(msg.sender, address(this), targetAudit.amount);
 
         require(
@@ -251,6 +251,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
             "TokenVesting: cannot create vesting schedule because insufficient tokens"
         );
         
+        targetAudit.isActive = true;
         targetAudit.start = block.timestamp;
 
         for (uint256 i = 0; i < schedules.length; i++) {
@@ -298,6 +299,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     function proposeCancelVesting(uint256 auditId, string memory calldata1) public {
         Audit storage targetAudit = audits[auditId];
 
+        require(targetAudit.isActive, "Cannot cancel vesting since it hasn't started yet");
         require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
 
@@ -331,6 +333,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         Audit storage targetAudit = audits[auditId];
 
         
+        require(targetAudit.isActive, "Cannot invalidate since it hasn't started yet");
         require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         // This require statement doesn't make sense, or maybe the message just doesn't make sense... does it?
         require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the auditee");
@@ -344,6 +347,12 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     function isWithdrawPaused(uint256 auditId) public view returns (bool) {
         Audit storage targetAudit = audits[auditId];
 
+        if (!targetAudit.isActive) {
+          // don't even look in the DAO, as entry won't exist. Just return immediately.
+          // Captures the case for auditID that doesn't exist, or auditID where isActive is false.
+          return false;
+        }
+
         return IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
     }
 
@@ -351,9 +360,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @notice Release vested amount of tokens.
      * @param vestingScheduleId the vesting schedule identifier
      */
-    function withdraw(
-        uint256 vestingScheduleId
-    ) public nonReentrant {
+    function withdraw(uint256 vestingScheduleId) public nonReentrant {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         Audit storage parentAudit = audits[vestingSchedule.auditId];
 
@@ -362,25 +369,15 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
         require(
             isAuditor || isReleasor,
-            "TokenVesting: only beneficiary and owner can release vested tokens"
+            "TokenVesting: only auditor and owner can release vested tokens"
         );
 
-        console.log(
-                "Is withdrawl frozen?: %s",
-                isWithdrawPaused(vestingScheduleId)
-        ); 
-
-        require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+        // COME BACK TO THIS.
+        // require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
        
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+        console.log(vestedAmount);
         vestingSchedule.withdrawn += vestedAmount;
-
-        console.log(
-                "%s is withdrawing %s tokens and has withdrawn %s total",
-                msg.sender,
-                vestedAmount,
-                vestingSchedule.withdrawn
-        );
 
         parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
     }
@@ -404,10 +401,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     function getVestingIdAtIndex(
         uint256 index
     ) external view returns (uint256) {
-        require(
-            index < getVestingSchedulesCount(),
-            "TokenVesting: index out of bounds"
-        );
+        require(index < getVestingSchedulesCount(), "TokenVesting: index out of bounds");
         return vestingSchedulesIds[index];
     }
 
@@ -453,6 +447,15 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         return vestingSchedules[vestingScheduleId];
     }
 
+
+    /**
+     * @notice helper function for returning the dynamically sized auditToVesting mapping.
+     * @param auditId auditId to return vestingSchedules for.
+     */
+    function getVestingSchedulesForAudit(uint256 auditId) public view returns (uint256[] memory) {
+      return auditToVesting[auditId];
+    }
+
     /**
      * @dev Computes the next vesting schedule identifier for a given holder address.
      */
@@ -495,6 +498,11 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         // Parent audit retains baseline audit terms.
         Audit storage parentAudit = audits[vestingSchedule.auditId];
 
+        if (!parentAudit.isActive) {
+          // captures inactive audits, or audits that don't exist.
+          return 0;
+        }
+
         uint256 currentTime = block.timestamp;
         // If the current time is before the cliff, no tokens are releasable.
         if (currentTime < parentAudit.cliff + parentAudit.start) {
@@ -507,11 +515,12 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         }
         // Otherwise, some tokens are releasable.
         else {
-            uint256 m = vestingSchedule.amount / (parentAudit.start + parentAudit.duration);
+            uint256 m = vestingSchedule.amount / parentAudit.duration;
             uint256 x = currentTime - parentAudit.start;
             uint256 y = m * x;
             // Subtract the amount already released and return.
-            return y - vestingSchedule.withdrawn;
+            uint256 releasable = y - vestingSchedule.withdrawn;
+            return releasable;
         }
     }
 

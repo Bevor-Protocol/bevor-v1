@@ -70,6 +70,7 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, Strings.toString(tokenId))) : "";
     }
 
+    // Transfer an NFT ??
     function trustlessHandoff(address from, address to, uint256 tokenId) public {
         auditRevealed[tokenId] = true;
         transferFrom(from, to, tokenId);
