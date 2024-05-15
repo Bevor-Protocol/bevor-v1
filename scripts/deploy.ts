@@ -8,8 +8,7 @@ async function main() {
   const TL = await ethers.getContractFactory("BevorTimelockController");
   const DAOProxy = await ethers.getContractFactory("DAOProxy");
   const Audit = await ethers.getContractFactory("Audit");
-  const TokenVestingMock = await ethers.getContractFactory("MockAuditPayment");
-  const TokenVesting = await ethers.getContractFactory("AuditPayment");
+  const BevorProtocol = await ethers.getContractFactory("BevorProtocol");
 
   const testToken = await Token.deploy(totalSupply, "Test Token", "TT");
   await testToken.waitForDeployment();
@@ -26,11 +25,8 @@ async function main() {
   const auditNFT = await Audit.deploy();
   await auditNFT.waitForDeployment();
 
-  const tokenVestingMock = await TokenVestingMock.deploy(daoProxy.getAddress(), auditNFT.getAddress());
-  await tokenVestingMock.waitForDeployment();
-
-  const tokenVesting = await TokenVesting.deploy(daoProxy.getAddress(), auditNFT.getAddress());
-  await tokenVesting.waitForDeployment();
+  const bevorProtocol = await BevorProtocol.deploy(daoProxy.getAddress(), auditNFT.getAddress());
+  await bevorProtocol.waitForDeployment();
 }
 
 // We recommend this pattern to be able to use async/await everywhere
