@@ -27,6 +27,8 @@ async function main() {
 
   const bevorProtocol = await BevorProtocol.deploy(daoProxy.getAddress(), auditNFT.getAddress());
   await bevorProtocol.waitForDeployment();
+
+  await auditNFT.transferOwnership(await bevorProtocol.getAddress());
 }
 
 // We recommend this pattern to be able to use async/await everywhere
