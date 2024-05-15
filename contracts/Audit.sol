@@ -18,11 +18,7 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
 
     mapping(uint256 => bool) public auditRevealed;
 
-    address public vesting;
-
-    constructor(address vesting_) ERC721("BevorAuditDeliverable", "BAD") {
-      
-    }
+    constructor() ERC721("BevorAuditDeliverable", "BAD") {}
 
     function _msgSender() internal view override(Context, ERC2771Recipient) returns (address sender) {
         sender = ERC2771Recipient._msgSender();
@@ -77,69 +73,6 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
     function trustlessHandoff(address from, address to, uint256 tokenId) public {
         auditRevealed[tokenId] = true;
         transferFrom(from, to, tokenId);
-    }
-
-    /**
-     * @dev Generates a Proof Of Integrity as the keccak256 hash of the concatenated string of all vesting fields.
-     * @param auditee The address of the auditee.
-     * @param auditors The addresses of the auditors.
-     * @param cliff The cliff period in seconds.
-     * @param duration The duration of the vesting period in seconds.
-     * @param details The hash of the provided audit details.
-     * @param slicePeriodSeconds The duration of a slice period for the vesting in seconds.
-     * @param amountTotal The total amount of tokens to be released at the end of the vesting.
-     * @param token The address of the ERC20 token being vested.
-     * @param salt The random salt uint256
-     * @return The keccak256 hash of the concatenated vesting data.
-     */
-    function generateAuditId(
-        address auditee,
-        address[] memory auditors,
-        uint256 cliff,
-        uint256 duration,
-        string  memory details,
-        uint256 slicePeriodSeconds,
-        uint256 amountTotal,
-        ERC20 token,
-        uint256 salt
-    ) public pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(
-            auditee,
-            auditors,
-            cliff,
-            duration,
-            details,
-            slicePeriodSeconds,
-            amountTotal,
-            token,
-            salt
-        )));
-    }
-
-    /**
-     * @dev Generates a Proof Of Integrity as the keccak256 hash of the concatenated string of all vesting fields.
-     * @param auditee The address of the auditee.
-     * @param findings The hash array of findings.
-     * @param auditTokenId The ID of the associated ERC721 audit NFT.
-     * @param salt random salt hash.
-     * @return The keccak256 hash of the concatenated vesting data.
-     */
-    function generateTokenId(
-        address auditee,
-        string[] memory findings,
-        uint256 auditTokenId,
-        uint256 salt
-    ) public pure returns (uint256) {
-        bytes memory findingsData = "";
-        for (uint i = 0; i < findings.length; i++) {
-            findingsData = abi.encodePacked(findingsData, findings[i]);
-        }
-        return uint256(keccak256(abi.encodePacked(
-            auditee,
-            findingsData,
-            auditTokenId,
-            salt
-        )));
     }
 
     /**

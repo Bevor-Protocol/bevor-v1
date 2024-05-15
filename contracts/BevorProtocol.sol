@@ -26,16 +26,15 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       uint256 duration;
       uint256 cliff;
       uint256 start;
+      uint256 invalidatingProposalId;
+      bool isActive;
     }
 
     struct VestingSchedule {
         address auditor;
-        string finding;
-        uint256 invalidatingProposalId;
         uint256 amount;
         uint256 withdrawn;
         uint256 auditId;
-        bool isActive;
     }
 
     uint256[] public vestingSchedulesIds;
@@ -104,6 +103,17 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      */
     fallback() external payable {}
 
+    /**
+     * @dev creates the locked version of the audit once all parties agree on terms
+     * also creates the vesting schedules. Marks all as inactive.
+     * @param auditors an array of auditors to conduct the audit
+     * @param cliff the cliff duration
+     * @param details a string hash of the protocol owner provided audit details
+     * @param amount total price of the audit
+     * @param token ERC20 token to be used for escrow + payment
+     * @param salt a random string
+     */
+
     function prepareAudit(
       address[] memory auditors,
       uint256 cliff,
@@ -111,7 +121,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       string  memory details,
       uint256 amount,
       ERC20 token,
-      uint256 salt
+      string memory salt
     ) public {
         require(bytes(details).length > 0, "details must be provided");
         require(auditors.length > 0, "at least 1 auditor must be provided");
@@ -136,7 +146,9 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
           amount,
           duration,
           cliff,
-          0
+          0,
+          0,
+          false
         );
 
         uint256[] memory auditorArr = new uint256[](auditors.length);
@@ -150,14 +162,11 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
           auditorArr[i] = vestingScheduleId;
 
           vestingSchedules[vestingScheduleId] = VestingSchedule(
-                auditor,
-                "",
-                0,
-                amount / auditors.length,
-                0,
-                auditId,
-                false
-            );
+            auditor,
+            0,
+            amount / auditors.length,
+            auditId
+          );
         }
 
         auditToVesting[auditId] = auditorArr;
@@ -185,7 +194,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         string  memory details,
         uint256 amountTotal,
         ERC20 token,
-        uint256 salt
+        string memory salt
     ) public pure returns (uint256) {
         return uint256(keccak256(abi.encodePacked(
             auditee,
@@ -200,7 +209,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Creates a new vesting schedule for a beneficiary.
+     * @dev Generates a Proof of Integrity as the keccak256 hash of the original audit, concatenated with additional findings.
      * @param auditId auditId of Audit constructor
      * @param findings findings produced by auditors
      */
@@ -219,20 +228,22 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Creates a new vesting schedule for a beneficiary.
+     * @dev Posts findings to the original audit, called by protocol owner of that audit. Kicks off vesting.
      * @param auditors addresses of the auditors
      * @param findings findings produced by auditors
-     * @param auditId auditId of interest
+     * @param auditId auditId of interest to post findings to
      */
     function revealFindings(address[] memory auditors, string[] memory findings, uint256 auditId) public {
 
         Audit storage targetAudit = audits[auditId];
         uint256[] storage schedules = auditToVesting[auditId];
 
+        require(targetAudit.protocolOwner == _msgSender(), "Only the auditee can mint this NFT");
         require(auditors.length == findings.length, "mismatch in auditors and findings lengths");
         require(schedules.length == auditors.length, "incorrect number of auditors passed");
-        require(targetAudit.protocolOwner == _msgSender(), "Only the auditee can mint this NFT");
+        require(!targetAudit.isActive, "audit schedule is already active");
 
+        targetAudit.isActive = true;
         targetAudit.token.transferFrom(msg.sender, address(this), targetAudit.amount);
 
         require(
@@ -244,12 +255,11 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
         for (uint256 i = 0; i < schedules.length; i++) {
             uint256 scheduleId = schedules[i];
+            address auditor = auditors[i];
+            string memory finding = findings[i];
             VestingSchedule storage schedule = vestingSchedules[scheduleId];
-            require(schedule.auditor == auditors[i], "mismatch in order of auditors");
-            require(!schedule.isActive, "schedule is already active");
-
-            schedule.finding = findings[i];
-            schedule.isActive = true;
+            require(bytes(finding).length > 0, "cannot provide an empty finding");
+            require(schedule.auditor == auditor, "mismatch in order of auditors");
         }
 
         // can easily be recreated starting from a source Audit struct.
@@ -259,35 +269,37 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Revokes the vesting schedule for given identifier.
-     * @param vestingScheduleId the vesting schedule identifier
+     * @notice Invalidates an audit and returns payment from all child vesting schedules
+     * @param auditId the audit identifier
      */
-    function invalidateAudit(
-        uint256 vestingScheduleId
-    ) public onlyDAO {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        Audit storage parentAudit = audits[vestingSchedule.auditId];
+    function invalidateAudit(uint256 auditId) public onlyDAO {
+        Audit storage targetAudit = audits[auditId];
+        uint256[] storage targetSchedules = auditToVesting[auditId];
 
-        require(IDAOProxy(dao).isVestingInvalidated(vestingSchedule.invalidatingProposalId), "Cannot invalidate vesting schedule if proposal is not passed");
+        require(IDAOProxy(dao).isVestingInvalidated(targetAudit.invalidatingProposalId), "Cannot invalidate vesting schedule if proposal is not passed");
 
-        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        if (vestedAmount > 0) {
-            vestingSchedule.withdrawn += vestedAmount;
-            parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+        // payout whatever remains from the vested funds to the auditor
+        // as the difference between audit price and total withdrawn funds by auditors.
+        uint256 totalWithdrawn = 0;
+        for (uint256 i = 0; i < targetSchedules.length; i++) {
+          VestingSchedule storage schedule = vestingSchedules[targetSchedules[i]];
+          uint256 vestedAmount = _computeReleasableAmount(schedule);
+          if (vestedAmount > 0) {
+            schedule.withdrawn += vestedAmount;
+            targetAudit.token.transfer(schedule.auditor, vestedAmount);
+          }
+          totalWithdrawn = totalWithdrawn + schedule.withdrawn;
         }
-
-        uint256 returnTotalAmount = vestingSchedule.amount - vestingSchedule.withdrawn;
         
         // AND then the DAO + voters... TBD.
-        parentAudit.token.transfer(parentAudit.protocolOwner, returnTotalAmount);
+        targetAudit.token.transfer(targetAudit.protocolOwner, targetAudit.amount - totalWithdrawn);
     }
 
-    function proposeCancelVesting(uint256 vestingScheduleId, string memory calldata1) public {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        Audit storage parentAudit = audits[vestingSchedule.auditId];
+    function proposeCancelVesting(uint256 auditId, string memory calldata1) public {
+        Audit storage targetAudit = audits[auditId];
 
-        require(vestingSchedule.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
-        require(msg.sender == parentAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the auditee");
+        require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
+        require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
 
         console.log(
                 "%s is proposing that the vesting schedule is cancelled.",
@@ -305,39 +317,38 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         values[0] = 0;
         calldatas[0] = bytes(calldata1);
 
-        console.log("All of the above variables workd");
+        console.log("All of the above variables worked");
 
         // Assuming 'dao' is your DAO contract
-        vestingSchedule.invalidatingProposalId = IDAOProxy(dao).propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
+        targetAudit.invalidatingProposalId = IDAOProxy(dao).propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
 
-        console.log("Invalidating Proposal Id: %s", vestingSchedule.invalidatingProposalId);
+        console.log("Invalidating Proposal Id: %s", targetAudit.invalidatingProposalId);
     }
 
     // TODO: Figure out a way to have this set automatically when a proposal is created
-    function setInvalidatingProposalId(uint256 vestingScheduleId, uint256 invalidatingProposalId) external {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        Audit storage parentAudit = audits[vestingSchedule.auditId];
+    // seems redudant with function above, as both set the invalidatingProposalID
+    function setInvalidatingProposalId(uint256 auditId, uint256 invalidatingProposalId) external {
+        Audit storage targetAudit = audits[auditId];
 
         
-        require(vestingSchedule.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
+        require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         // This require statement doesn't make sense, or maybe the message just doesn't make sense... does it?
-        require(msg.sender == parentAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the auditee");
+        require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the auditee");
 
-       vestingSchedule.invalidatingProposalId = invalidatingProposalId;
+       targetAudit.invalidatingProposalId = invalidatingProposalId;
     }
 
     /**
       * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
       */
-    function isWithdrawPaused(uint256 vestingScheduleId) public view returns (bool) {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+    function isWithdrawPaused(uint256 auditId) public view returns (bool) {
+        Audit storage targetAudit = audits[auditId];
 
-        return IDAOProxy(dao).isWithdrawFrozen(vestingSchedule.invalidatingProposalId);
+        return IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
     }
 
     /**
      * @notice Release vested amount of tokens.
-     * TODO: Figure out how to restrict withdrawls when the 
      * @param vestingScheduleId the vesting schedule identifier
      */
     function withdraw(
@@ -359,7 +370,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
                 isWithdrawPaused(vestingScheduleId)
         ); 
 
-        require(!IDAOProxy(dao).isWithdrawFrozen(vestingSchedule.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+        require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
        
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         vestingSchedule.withdrawn += vestedAmount;
@@ -375,18 +386,20 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Returns the number of vesting schedules associated to a beneficiary.
-     * @return the number of vesting schedules
+     * @dev Returns the number of vesting schedules associated to an auditor.
+     * @param _auditor address of auditor
+     * @return count the number of vesting schedules
      */
-    function getVestingSchedulesCountByBeneficiary(
-        address _beneficiary
+    function getVestingSchedulesCountByAuditor(
+        address _auditor
     ) external view returns (uint256) {
-        return holdersVestingCount[_beneficiary];
+        return holdersVestingCount[_auditor];
     }
 
     /**
      * @dev Returns the vesting schedule id at the given index.
-     * @return the vesting id
+     * @param index the index of the vesting schedule
+     * @return vestingId vesting id
      */
     function getVestingIdAtIndex(
         uint256 index
@@ -400,21 +413,23 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
     /**
      * @notice Returns the vesting schedule information for a given holder and index.
-     * @return the vesting schedule structure information
+     * @param auditor auditor to get the vesting schedule for
+     * @param index index of the vesting schedule for the auditor.
+     * @return vestingSchedule the vesting schedule structure information
      */
     function getVestingScheduleByAddressAndIndex(
-        address holder,
+        address auditor,
         uint256 index
     ) external view returns (VestingSchedule memory) {
         return
             getVestingSchedule(
-                computeVestingScheduleIdForAddressAndIndex(holder, index)
+                computeVestingScheduleIdForAddressAndIndex(auditor, index)
             );
     }
 
     /**
      * @dev Returns the number of vesting schedules managed by this contract.
-     * @return the number of vesting schedules
+     * @return total the total number of vesting schedules
      */
     function getVestingSchedulesCount() public view returns (uint256) {
         return vestingSchedulesIds.length;
@@ -422,7 +437,8 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
     /**
      * @notice Computes the vested amount of tokens for the given vesting schedule identifier.
-     * @return the vested amount
+     * @param vestingScheduleId id to compute releaseable amounts for.
+     * @return amount the vested amount since last withdrawal
      */
     function computeReleasableAmount(uint256 vestingScheduleId) external view returns (uint256) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
@@ -491,7 +507,6 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         }
         // Otherwise, some tokens are releasable.
         else {
-            // Compute the number of full vesting periods that have elapsed.
             uint256 m = vestingSchedule.amount / (parentAudit.start + parentAudit.duration);
             uint256 x = currentTime - parentAudit.start;
             uint256 y = m * x;
