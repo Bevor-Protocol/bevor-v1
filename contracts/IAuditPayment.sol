@@ -13,15 +13,16 @@ interface IAuditPayment {
      * @dev Creates a new agreement
      */
     function createVestingSchedules(
-      address auditee,
-      address[] memory auditors,
-      uint256 start,
-      uint256 cliff,
-      uint256 duration,
-      uint256 slicePeriodSeconds,
-      uint256 amount,
-      ERC20 token,
-      uint256 tokenId) external;
+        address auditee,
+        address[] memory auditors,
+        string[] memory findings,
+        uint256 start,
+        uint256 cliff,
+        uint256 duration,
+        uint256 slicePeriodSeconds,
+        uint256 amount,
+        ERC20 token,
+        uint256 tokenId) external;
     
     function setAuditContract(address _auditContract) external;
 

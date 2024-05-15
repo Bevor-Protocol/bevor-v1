@@ -102,6 +102,47 @@ describe("AuditNFT Functionality", function () {
 
     });
 
+    it("Can't spoof auditId in mint()", async () => {
+      const tokenVestingAddress = await tokenVesting.getAddress()
+        
+      auditNFT = await Audit.deploy(tokenVestingAddress);
+      await auditNFT.waitForDeployment();
+
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+
+      const cliff = 10;
+      const duration = 1000;
+      const slicePeriodSeconds = 1;
+      const amount =  100;
+      const salt = 5000;
+      const details = "some random content";
+
+      const testTokenAddress = await testToken.getAddress();
+
+      // create the auditID, but don't create the Audit struct
+      const auditId = await auditNFT.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        slicePeriodSeconds,
+        amount,
+        testTokenAddress,
+        salt
+      );
+
+      expect(await auditNFT.connect(auditee).mint(
+        auditee,
+        auditId,
+        ["findings1", "findings2"],
+        auditors,
+        salt
+      )).to.be.revertedWith("VM Exception while processing transaction: reverted with reason string 'Only the auditee can mint this NFT'");
+
+    })
+
     it('Trustless handoff should change to reveal URI', async () => {
         //Switches to https://ipfs.io/ipfs/ from https://api.bevor.io/ upon reveal
         const tokenVestingAddress = await tokenVesting.getAddress()
@@ -120,7 +161,9 @@ describe("AuditNFT Functionality", function () {
         const details = "some random content";
 
         await testToken.approve(tokenVestingAddress, 1000);
-        // await auditNFT.connect(auditee).setApprovalForAll(tokenVestingAddress, true);
+        const conBalance = await testToken.balanceOf(owner);
+        console.log(conBalance);
+        await auditNFT.connect(auditee).setApprovalForAll(tokenVestingAddress, true);
 
         const testTokenAddress = await testToken.getAddress();
 

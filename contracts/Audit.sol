@@ -12,42 +12,16 @@ import "./ISmartAgreement.sol";
 import "./IAuditPayment.sol";
 
 contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
-    struct AuditInfo {
-        // Auditor of the NFT 
-        address auditee;
-        // Auditors
-        address[] auditors;
-        // cliff of vesting period
-        uint256 cliff;
-        // duration of audit
-        uint256 duration;
-        // define vesting schedule
-        uint256 slicePeriodSeconds;
-        // total amount to pay for audit
-        uint256 amountTotal;
-        // address of erc20 to be vested
-        ERC20 token;
-    }
 
     address[] internal _test;
     uint256 public maxTokensPerWallet = 100;
 
-    mapping(uint256 => AuditInfo) public audits;
     mapping(uint256 => bool) public auditRevealed;
 
     address public vesting;
 
-    /**
-     * @dev Emitted when an audit is created with a unique identifier.
-     * @param auditId The unique identifier for the audit.
-     */
-    event AuditCreated(uint256 indexed auditId);
-
-
     constructor(address vesting_) ERC721("BevorAuditDeliverable", "BAD") {
-      require(address(vesting_) != address(0x0));
-      vesting = vesting_;
-      IAuditPayment(vesting).setAuditContract(address(this));
+      
     }
 
     function _msgSender() internal view override(Context, ERC2771Recipient) returns (address sender) {
@@ -58,64 +32,7 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         return ERC2771Recipient._msgData();
     }
     
-    function createAudit(
-      address[] memory auditors,
-      uint256 cliff,
-      uint256 duration,
-      string  memory details,
-      uint256 slicePeriodSeconds,
-      uint256 amountTotal,
-      ERC20 token,
-      uint256 salt) public {
-        require(bytes(details).length > 0, "details must be provided");
-        require(auditors.length > 0, "at least 1 auditor must be provided");
-
-        uint256 auditId = generateAuditId(
-          _msgSender(),
-          auditors,
-          cliff,
-          duration,
-          details,
-          slicePeriodSeconds,
-          amountTotal,
-          token,
-          salt
-        );
-
-        // putting more information in the struct allows us to access it later in mint()
-        // without passing repetitive parameters.
-        audits[auditId] = AuditInfo(_msgSender(), auditors, cliff, duration, slicePeriodSeconds, amountTotal, token);        
-        emit AuditCreated(auditId);
-    }
-
-    function mint(address _to, uint256 auditId, string[] memory findings, address[] memory auditors, uint256 salt) public {        
-        require(audits[auditId].auditee == _to, "Only the auditee can mint this NFT");
-        require(audits[auditId].auditors.length == auditors.length, "Mismatch in number of auditors");
-        require(audits[auditId].auditors.length == findings.length, "Mismatch in number of findings");
-
-        for(uint i = 0; i < findings.length; i++) {
-          require(audits[auditId].auditors[i] == auditors[i], "Mismatch between findings and auditors");
-        }
-
-        uint256 tokenId = generateTokenId(
-          _msgSender(),
-          findings,
-          auditId,
-          salt
-        );
-
-        IAuditPayment(vesting).createVestingSchedules(
-          _msgSender(),
-          audits[auditId].auditors,
-          block.timestamp,
-          audits[auditId].cliff,
-          audits[auditId].duration,
-          audits[auditId].slicePeriodSeconds,
-          audits[auditId].amountTotal,
-          audits[auditId].token,
-          tokenId
-        );
-
+    function mint(address _to, uint256 tokenId) public onlyOwner {
         _mint(_to, tokenId);
     }
 
