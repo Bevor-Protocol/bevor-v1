@@ -136,7 +136,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
           amount,
           duration,
           cliff,
-          block.timestamp
+          0
         );
 
         uint256[] memory auditorArr = new uint256[](auditors.length);
@@ -240,6 +240,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
             "TokenVesting: cannot create vesting schedule because insufficient tokens"
         );
         
+        targetAudit.start = block.timestamp;
 
         for (uint256 i = 0; i < schedules.length; i++) {
             uint256 scheduleId = schedules[i];
