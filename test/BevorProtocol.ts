@@ -567,8 +567,6 @@ describe("AuditNFT Functionality", function () {
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(0);
       expect(await testToken.balanceOf(auditor1[0])).to.equal(expectedRelease);
       expect(await testToken.balanceOf(auditor2[0])).to.equal(expectedRelease);
-
-
   });
 
 });
