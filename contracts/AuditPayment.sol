@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/governance/IGovernor.sol";
 import "hardhat/console.sol";
-import "./IAudit.sol";
 import "./IBevorDAO.sol";
 import "./BevorDAO.sol";
 import "./DAOProxy.sol";
@@ -21,8 +20,10 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     struct VestingSchedule {
         // beneficiary of tokens after they are released
         address auditor;
-        // beneficiary of tokens after they are released
+        // sender of tokens after they are released
         address auditee;
+        // audit findings hash of content
+        string finding;
         // cliff period in seconds
         uint256 cliff; 
         // start time of the vesting period
@@ -63,6 +64,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
     event VestingScheduleCreated(
         address indexed auditor,
         address indexed auditee,
+        string finding,
         uint256 cliff,
         uint256 start,
         uint256 duration,
@@ -76,17 +78,26 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
      */
-    constructor(address dao_, address audit_) {
+    constructor(address dao_) {
         // Check that the token address is not 0x0.
         require(address(dao_) != address(0x0));
-        require(address(audit_) != address(0x0));
         dao = dao_;
-        audit = audit_;
     }
 
     modifier onlyDAO() {
         require(msg.sender == address(dao));
             _;
+    }
+
+    modifier onlyAudit() {
+        require(msg.sender == address(audit));
+            _;
+    }
+
+    function setAuditContract(address _auditContract) external {
+      require(msg.sender == _auditContract, "not called from source contract");
+      require(tx.origin == owner(), "not the same owner");
+      audit = _auditContract;
     }
 
     /**
@@ -107,8 +118,10 @@ contract AuditPayment is Ownable, ReentrancyGuard {
      * @param cliff duration in seconds of the cliff in which tokens will begin to vest
      * @param duration duration in seconds of the period in which the tokens will vest
      */
-    function createVestingSchedule(
+    function createVestingSchedules(
+        address auditee,
         address[] memory auditors,
+        string[] memory findings,
         uint256 start,
         uint256 cliff,
         uint256 duration,
@@ -116,12 +129,12 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         uint256 amount,
         ERC20 token,
         uint256 tokenId
-    ) external onlyOwner {
-        token.transferFrom(msg.sender, address(this), amount);
+    ) external onlyAudit {
+        token.transferFrom(auditee, address(this), amount);
         
         require(
             token.balanceOf(address(this)) >= amount,
-            "TokenVesting: cannot create vesting schedule because not sufficient tokens"
+            "TokenVesting: cannot create vesting schedule because insufficient tokens"
         );
         require(duration > 0, "TokenVesting: duration must be > 0");
         require(amount > 0, "TokenVesting: amount must be > 0");
@@ -131,19 +144,19 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         );
         require(duration >= cliff, "TokenVesting: duration must be >= cliff");
 
-        require(IAudit(audit).ownerOf(tokenId) != address(0), "TokenVesting: tokenId does not exist in NFT contract");
-
         uint256 cliff_time = start + cliff;
 
         for (uint256 i = 0; i < auditors.length; i++) {
             address auditor = auditors[i];
+            string memory finding = findings[i];
             bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(
                 auditor
             );
 
             vestingSchedules[vestingScheduleId] = VestingSchedule(
                 auditor,
-                msg.sender,
+                auditee,
+                finding,
                 cliff_time,
                 start,
                 duration,
@@ -156,21 +169,23 @@ contract AuditPayment is Ownable, ReentrancyGuard {
             );
 
             vestingSchedulesIds.push(vestingScheduleId);
+            console.log(uint256(vestingScheduleId));
             uint256 currentVestingCount = holdersVestingCount[auditor];
             holdersVestingCount[auditor] = currentVestingCount + 1;
+
+            emit VestingScheduleCreated(
+              auditor,
+              auditee,
+              finding,
+              cliff_time,
+              start,
+              duration,
+              slicePeriodSeconds,
+              amount,
+              token,
+              tokenId
+            );
         }
-        
-        emit VestingScheduleCreated(
-            auditors[0],
-            msg.sender,
-            cliff_time,
-            start,
-            duration,
-            slicePeriodSeconds,
-            amount,
-            token,
-            tokenId
-        );
 
         // Revert if audit nft does not exist (probably do this is NFT contract)
         //require(audit.ownerOf(_tokenId) == _auditor, "Audit NFT is not owned by caller");
@@ -216,7 +231,7 @@ contract AuditPayment is Ownable, ReentrancyGuard {
         require(msg.sender == vestingSchedule.auditee, "Cannot propose that the audit is invalid if you are not the auditee");
 
         console.log(
-                "%s is proposing vesting schedule is cancelled.",
+                "%s is proposing that the vesting schedule is cancelled.",
                 address(this) 
         );
 
