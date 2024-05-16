@@ -130,7 +130,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         require(duration >= cliff, "TokenVesting: duration must be >= cliff");
 
         uint256 auditId = generateAuditId(
-          _msgSender(),
+          msg.sender,
           auditors,
           cliff,
           duration,
@@ -141,7 +141,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         );
 
         audits[auditId] = Audit(
-          _msgSender(),
+          msg.sender,
           token,
           amount,
           duration,
@@ -241,7 +241,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         Audit storage targetAudit = audits[auditId];
         uint256[] storage schedules = auditToVesting[auditId];
 
-        require(targetAudit.protocolOwner == _msgSender(), "Only the auditee can mint this NFT");
+        require(targetAudit.protocolOwner == msg.sender, "Only the auditee can mint this NFT");
         require(schedules.length == findings.length, "incorrect number of auditors passed");
         require(!targetAudit.isActive, "audit schedule is already active");
 
@@ -263,7 +263,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         // can easily be recreated starting from a source Audit struct.
         uint256 tokenId = generateTokenId(auditId, findings);
 
-        IAudit(nft).mint(_msgSender(), tokenId);
+        IAudit(nft).mint(msg.sender, tokenId);
     }
 
     /**
