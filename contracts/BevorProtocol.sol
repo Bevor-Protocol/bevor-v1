@@ -230,18 +230,19 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
     /**
      * @dev Posts findings to the original audit, called by protocol owner of that audit. Kicks off vesting.
-     * @param auditors addresses of the auditors
      * @param findings findings produced by auditors
      * @param auditId auditId of interest to post findings to
      */
-    function revealFindings(address[] memory auditors, string[] memory findings, uint256 auditId) public {
+    function revealFindings(string[] memory findings, uint256 auditId) public {
+        // removed passing auditors[] as a parameter. spoofing this is expensive, and we already have information
+        // about which auditors belong to each audit, which is verifiable through the auditId generation.
+        // further, it's not even used to generate the tokenId.
 
         Audit storage targetAudit = audits[auditId];
         uint256[] storage schedules = auditToVesting[auditId];
 
         require(targetAudit.protocolOwner == _msgSender(), "Only the auditee can mint this NFT");
-        require(auditors.length == findings.length, "mismatch in auditors and findings lengths");
-        require(schedules.length == auditors.length, "incorrect number of auditors passed");
+        require(schedules.length == findings.length, "incorrect number of auditors passed");
         require(!targetAudit.isActive, "audit schedule is already active");
 
         targetAudit.token.transferFrom(msg.sender, address(this), targetAudit.amount);
@@ -254,13 +255,9 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         targetAudit.isActive = true;
         targetAudit.start = block.timestamp;
 
-        for (uint256 i = 0; i < schedules.length; i++) {
-            uint256 scheduleId = schedules[i];
-            address auditor = auditors[i];
+        for (uint256 i = 0; i < findings.length; i++) {
             string memory finding = findings[i];
-            VestingSchedule storage schedule = vestingSchedules[scheduleId];
             require(bytes(finding).length > 0, "cannot provide an empty finding");
-            require(schedule.auditor == auditor, "mismatch in order of auditors");
         }
 
         // can easily be recreated starting from a source Audit struct.
@@ -381,6 +378,18 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
         parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
     }
+
+    function _auditContainsAuditor(uint256 auditId, address auditor) internal view returns(bool) {
+        uint256[] storage schedules = auditToVesting[auditId];
+        
+        for (uint256 i = 0; i < schedules.length; i++) {
+          VestingSchedule storage schedule = vestingSchedules[schedules[i]];
+          if (schedule.auditor == auditor) {
+            return true;
+          }
+        }
+        return false;
+    } 
 
     /**
      * @dev Returns the number of vesting schedules associated to an auditor.
