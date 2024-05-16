@@ -239,7 +239,6 @@ describe("AuditNFT Functionality", function () {
       )
 
       await expect(bevorProtocol.connect(auditee).revealFindings(
-        auditors,
         findings,
         auditId,
       )).to.be.revertedWith("ERC20: insufficient allowance");
@@ -300,7 +299,6 @@ describe("AuditNFT Functionality", function () {
       const now = Math.round(new Date().getTime() / 1000);
 
       await bevorProtocol.connect(auditee).revealFindings(
-        auditors,
         findings,
         auditId,
       )
@@ -360,7 +358,6 @@ describe("AuditNFT Functionality", function () {
       await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
 
       await expect(bevorProtocol.connect(auditee).revealFindings(
-        auditors,
         findings,
         randomId,
       )).to.be.revertedWith("Only the auditee can mint this NFT");
