@@ -4,16 +4,16 @@ const { expect } = require("chai");
 const { ethers, BigNumber } = require("hardhat");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 
-// Fork of https://github.com/abdelhamidbakhta/token-vesting-contracts/blob/5107b251b18ea599095661b407625ddb994b516b/test/TokenVesting.js
+// Fork of https://github.com/abdelhamidbakhta/token-vesting-contracts/blob/5107b251b18ea599095661b407625ddb994b516b/test/bevorProtocol.js
 
-describe("AuditNFT Functionality", function () {
+describe("Bevor Protocol Functionality", function () {
   let Token: any;
   let DAO: any;
   let TL: any;
   let Audit: any;
   let testToken: any;
   let timelock: any;
-  let bevorDAO: any;
+  let daoProxy: any;
   let bevorProtocol: any;
   let auditNFT: any;
   let BevorProtocol: any;
@@ -26,7 +26,7 @@ describe("AuditNFT Functionality", function () {
   before(async function () {
     Token = await ethers.getContractFactory("ERC20Token");
     TL = await ethers.getContractFactory("BevorTimelockController");
-    DAO = await ethers.getContractFactory("BevorDAO");
+    DAO = await ethers.getContractFactory("DAOProxy");
     Audit = await ethers.getContractFactory("Audit");
     BevorProtocol = await ethers.getContractFactory("BevorProtocol");
   });
@@ -40,13 +40,13 @@ describe("AuditNFT Functionality", function () {
     timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
     await timelock.waitForDeployment();
     
-    bevorDAO = await DAO.deploy(await testToken.getAddress(), await timelock.getAddress());
-    await bevorDAO.waitForDeployment();
+    daoProxy = await DAO.deploy();
+    await daoProxy.waitForDeployment();
 
     auditNFT = await Audit.deploy();
     await auditNFT.waitForDeployment();
 
-    bevorProtocol = await BevorProtocol.deploy(await bevorDAO.getAddress(), await auditNFT.getAddress());
+    bevorProtocol = await BevorProtocol.deploy(await daoProxy.getAddress(), await auditNFT.getAddress());
     await bevorProtocol.waitForDeployment();
   });
 
@@ -520,18 +520,20 @@ describe("AuditNFT Functionality", function () {
 
       const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
 
-      const auditor1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
-      const auditor2 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
+      const vestingSchedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
+      const vestingSchedule2 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
+      const auditor1 = vestingSchedule1[0];
+      const auditor2 = vestingSchedule2[0];
       
       // protocol owner should've transferred all tokens to bevorProtocol
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
       expect(await testToken.balanceOf(auditee)).to.equal(10);
-      expect(await testToken.balanceOf(auditor1[0])).to.equal(0);
+      expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
       // should return nothing as cliff wasn't reached. Auditor should still have 0 funds.
       await bevorProtocol.withdraw(createdScheduleIDs[0]);
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
-      expect(await testToken.balanceOf(auditor1[0])).to.equal(0);
+      expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
       // mines a new block equal to the cliff, should start initial vesting.
       const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
@@ -543,7 +545,7 @@ describe("AuditNFT Functionality", function () {
       // we might be off some some precision value by the time the _computeReleasableAmount() is called
       // allow for some delta of error.
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.be.closeTo(amount - expectedRelease, 10);
-      expect(await testToken.balanceOf(auditor1[0])).to.be.closeTo(expectedRelease, 10);
+      expect(await testToken.balanceOf(auditor1)).to.be.closeTo(expectedRelease, 10);
 
       // simulate a block that occurs after the vesting period is over.
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 10));
@@ -553,15 +555,113 @@ describe("AuditNFT Functionality", function () {
 
       // we allowed some some window of error by +10 to the duration, we can be precise now.
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(expectedRelease);
-      expect(await testToken.balanceOf(auditor1[0])).to.equal(expectedRelease);
-      expect(await testToken.balanceOf(auditor2[0])).to.equal(0);
+      expect(await testToken.balanceOf(auditor1)).to.equal(expectedRelease);
+      expect(await testToken.balanceOf(auditor2)).to.equal(0);
 
       // now let's say the 2nd auditor makes a withdrawal
 
       await bevorProtocol.withdraw(createdScheduleIDs[1]);
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(0);
-      expect(await testToken.balanceOf(auditor1[0])).to.equal(expectedRelease);
-      expect(await testToken.balanceOf(auditor2[0])).to.equal(expectedRelease);
+      expect(await testToken.balanceOf(auditor1)).to.equal(expectedRelease);
+      expect(await testToken.balanceOf(auditor2)).to.equal(expectedRelease);
   });
 
+  it("Test vesting and dao behavior with freezing and unfreezing.", async () => {
+    const bevorProtocolAddress = await bevorProtocol.getAddress();
+    await auditNFT.transferOwnership(bevorProtocolAddress);
+    const tokenAddress = await testToken.getAddress();
+    
+
+    const auditee = addr1;
+    const auditors = [addrs[0], addrs[1]];
+    const cliff = 1000;
+    const duration = 10000;
+    const details = "here are my details";
+    const amount = 100000;
+    const salt = "some random salt";
+    const findings = ["finding 1", "finding 2"];
+
+    await testToken.transfer(auditee, amount + 10);
+
+    const auditId = await bevorProtocol.generateAuditId(
+      auditee,
+      auditors,
+      cliff,
+      duration,
+      details,
+      amount,
+      tokenAddress,
+      salt
+    )
+
+    await bevorProtocol.connect(auditee).prepareAudit(
+      auditors,
+      cliff,
+      duration,
+      details,
+      amount,
+      tokenAddress,
+      salt,
+    )
+    
+    const tokenId = await bevorProtocol.generateTokenId(
+      auditId,
+      findings,
+    )
+
+    await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+    // await testToken.transfer(auditee, amount + 10);
+    // await testToken.connect(auditee).approve(auditee, amount);
+    // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+
+    await bevorProtocol.connect(auditee).revealFindings(
+      findings,
+      auditId,
+    )
+
+    const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+
+    const vestingSchedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
+    const vestingSchedule2 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
+    const auditor1 = vestingSchedule1[0];
+    const auditor2 = vestingSchedule2[0];
+    
+    // protocol owner should've transferred all tokens to bevorProtocol
+    expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+    expect(await testToken.balanceOf(auditee)).to.equal(10);
+    expect(await testToken.balanceOf(auditor1)).to.equal(0);
+
+    // should return nothing as cliff wasn't reached. Auditor should still have 0 funds.
+    await bevorProtocol.withdraw(createdScheduleIDs[0]);
+    expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+    expect(await testToken.balanceOf(auditor1)).to.equal(0);
+
+    // Make a proposal based on the vesting address
+    // await daoProxy.propose([await bevorProtocol.getAddress()], [1], [], "");
+    // await bevorProtocol.connect(auditee).setInvalidatingProposalId(auditId, 1);
+    await bevorProtocol.connect(auditee).proposeCancelVesting(auditId, "");
+
+    let pid = await bevorProtocol.audits(auditId);
+    console.log(`Invalidating Proposal ID: ${pid}`);
+    await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
+
+    await daoProxy.setProposalFrozen(1, false);
+    await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(false);
+
+    await daoProxy.setProposalFrozen(1, true);
+    await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
+    
+    await daoProxy.setProposalInvalidated(1, true);
+    await expect(await daoProxy.isVestingInvalidated(1)).to.be.equal(true);
+
+    // Check if the number of tokens at the bottom was just transferred to the protocolOwner
+    const protocolOwnerBalanceBefore = BigInt(await testToken.balanceOf(auditee));
+    await bevorProtocol.returnFundsAfterAuditInvalidation(auditId);
+    const protocolOwnerBalanceAfter = BigInt(await testToken.balanceOf(auditee));
+    const expectedTransferAmount = amount;
+    console.log(`Protocol Owner Balance Before: ${protocolOwnerBalanceBefore}`);
+    console.log(`Protocol Owner Balance After: ${protocolOwnerBalanceAfter}`);
+    console.log(`Expected Transfer Amount: ${expectedTransferAmount}`);
+    expect(protocolOwnerBalanceAfter - protocolOwnerBalanceBefore).to.equal(expectedTransferAmount);
+  });
 });
