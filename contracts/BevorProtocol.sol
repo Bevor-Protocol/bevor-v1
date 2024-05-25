@@ -270,7 +270,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @notice Invalidates an audit and returns payment from all child vesting schedules
      * @param auditId the audit identifier
      */
-    function invalidateAudit(uint256 auditId) public onlyDAO {
+    function returnFundsAfterAuditInvalidation(uint256 auditId) public {
         Audit storage targetAudit = audits[auditId];
         uint256[] storage targetSchedules = auditToVesting[auditId];
 
@@ -279,18 +279,15 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         // payout whatever remains from the vested funds to the auditor
         // as the difference between audit price and total withdrawn funds by auditors.
         uint256 totalWithdrawn = 0;
+        uint256 totalAmount = 0;
         for (uint256 i = 0; i < targetSchedules.length; i++) {
           VestingSchedule storage schedule = vestingSchedules[targetSchedules[i]];
-          uint256 vestedAmount = _computeReleasableAmount(schedule);
-          if (vestedAmount > 0) {
-            schedule.withdrawn += vestedAmount;
-            targetAudit.token.transfer(schedule.auditor, vestedAmount);
-          }
           totalWithdrawn = totalWithdrawn + schedule.withdrawn;
+          totalAmount = totalAmount + schedule.amount;
         }
         
         // AND then the DAO + voters... TBD.
-        targetAudit.token.transfer(targetAudit.protocolOwner, targetAudit.amount - totalWithdrawn);
+        targetAudit.token.transfer(targetAudit.protocolOwner, totalAmount - totalWithdrawn);
     }
 
     function proposeCancelVesting(uint256 auditId, string memory calldata1) public {
@@ -333,9 +330,9 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         require(targetAudit.isActive, "Cannot invalidate since it hasn't started yet");
         require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         // This require statement doesn't make sense, or maybe the message just doesn't make sense... does it?
-        require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the auditee");
+        require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
 
-       targetAudit.invalidatingProposalId = invalidatingProposalId;
+        targetAudit.invalidatingProposalId = invalidatingProposalId;
     }
 
     /**
@@ -345,10 +342,13 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         Audit storage targetAudit = audits[auditId];
 
         if (!targetAudit.isActive) {
+            console.log("Audit is not active");
           // don't even look in the DAO, as entry won't exist. Just return immediately.
           // Captures the case for auditID that doesn't exist, or auditID where isActive is false.
           return false;
         }
+
+        console.log("Getting past here");
 
         return IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
     }
@@ -370,7 +370,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         );
 
         // COME BACK TO THIS.
-        // require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+        require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
        
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         console.log(vestedAmount);

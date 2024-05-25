@@ -8,8 +8,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "hardhat/console.sol";
-import "./ISmartAgreement.sol";
-import "./IAuditPayment.sol";
 
 contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
 
