@@ -430,6 +430,17 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
             );
     }
 
+    function getVestingScheduleByAddressAndAudit(address auditor, uint256 auditId) public view returns (VestingSchedule memory) {
+      uint256[] storage schedules = auditToVesting[auditId];
+      for (uint256 i = 0; i < schedules.length; i++) {
+        VestingSchedule storage schedule = vestingSchedules[schedules[i]];
+        if (schedule.auditor == auditor) {
+          return schedule;
+        }
+      }
+      revert("No vesting schedule found for this auditor in this audit");
+    }
+
     /**
      * @dev Returns the number of vesting schedules managed by this contract.
      * @return total the total number of vesting schedules
@@ -443,7 +454,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param vestingScheduleId id to compute releaseable amounts for.
      * @return amount the vested amount since last withdrawal
      */
-    function computeReleasableAmount(uint256 vestingScheduleId) external view returns (uint256) {
+    function computeReleasableAmount(uint256 vestingScheduleId) public view returns (uint256) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         return _computeReleasableAmount(vestingSchedule);
     }

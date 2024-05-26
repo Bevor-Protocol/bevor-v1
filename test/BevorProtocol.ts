@@ -664,4 +664,65 @@ describe("Bevor Protocol Functionality", function () {
     console.log(`Expected Transfer Amount: ${expectedTransferAmount}`);
     expect(protocolOwnerBalanceAfter - protocolOwnerBalanceBefore).to.equal(expectedTransferAmount);
   });
+  
+  it("Public view for getting vesting schedule should work", async () => {
+    const bevorProtocolAddress = await bevorProtocol.getAddress();
+    await auditNFT.transferOwnership(bevorProtocolAddress);
+    const tokenAddress = await testToken.getAddress();
+    
+
+    const auditee = addr1;
+    const auditors = [addrs[0], addrs[1]];
+    const cliff = 1000;
+    const duration = 10000;
+    const details = "here are my details";
+    const amount = 100000;
+    const salt = "some random salt";
+    const findings = ["finding 1", "finding 2"];
+
+    await testToken.transfer(auditee, amount + 10);
+
+    const auditId = await bevorProtocol.generateAuditId(
+      auditee,
+      auditors,
+      cliff,
+      duration,
+      details,
+      amount,
+      tokenAddress,
+      salt
+    )
+
+    await bevorProtocol.connect(auditee).prepareAudit(
+      auditors,
+      cliff,
+      duration,
+      details,
+      amount,
+      tokenAddress,
+      salt,
+    )
+
+    // start time should be zero
+    expect((await bevorProtocol.audits(auditId))[5]).to.equal(0);
+    
+    const tokenId = await bevorProtocol.generateTokenId(
+      auditId,
+      findings,
+    )
+
+    await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+    // await testToken.transfer(auditee, amount + 10);
+    // await testToken.connect(auditee).approve(auditee, amount);
+    // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+
+    expect((await bevorProtocol.getVestingScheduleByAddressAndAudit(
+      addrs[0],
+      auditId,
+    ))[0]).to.equal(addrs[0]);
+
+    await expect(bevorProtocol.getVestingScheduleByAddressAndAudit(
+      addrs[3], auditId
+    )).to.be.revertedWith("No vesting schedule found for this auditor in this audit");
+  })
 });
