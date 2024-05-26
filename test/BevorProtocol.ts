@@ -440,6 +440,71 @@ describe("Bevor Protocol Functionality", function () {
   
     });
 
+    it("Test for underflow value (decimal point) in contract", async () => {
+      // tests a low amount locked (and small cliff)
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const duration = 24 * 60 * 60;
+      const details = "here are my details";
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
+
+      // these values would originally produce decimal points, which solidity can't handle.
+      // make sure this passes. It should have a releasable amount > 0 on or after cliff.
+      // cliff can even be zero here.
+      const cliff = 1;
+      const amount = 1000;
+  
+      await testToken.transfer(auditee, amount + 1);
+  
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+  
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+  
+      // audit should not be marked as active.
+      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+  
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+      
+      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
+  
+      const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+
+      await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff + 1));
+      const newRelease = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0]);
+
+      expect(newRelease).to.be.greaterThan(0n);
+    });
+
     it("Test incremental release amounts", async () => {
       const bevorProtocolAddress = await bevorProtocol.getAddress();
       await auditNFT.transferOwnership(bevorProtocolAddress);
