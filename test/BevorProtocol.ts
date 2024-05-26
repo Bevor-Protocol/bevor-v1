@@ -716,13 +716,23 @@ describe("Bevor Protocol Functionality", function () {
     // await testToken.connect(auditee).approve(auditee, amount);
     // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
 
-    expect((await bevorProtocol.getVestingScheduleByAddressAndAudit(
+    const vestingScheduleId0 = await bevorProtocol.getVestingScheduleIdByAddressAndAudit(
       addrs[0],
       auditId,
-    ))[0]).to.equal(addrs[0]);
+    );
 
-    await expect(bevorProtocol.getVestingScheduleByAddressAndAudit(
-      addrs[3], auditId
+    expect((await bevorProtocol.vestingSchedules(vestingScheduleId0))[0]).to.equal(addrs[0]);
+
+    const vestingScheduleId1 = await bevorProtocol.getVestingScheduleIdByAddressAndAudit(
+      addrs[1],
+      auditId,
+    );
+
+    expect((await bevorProtocol.vestingSchedules(vestingScheduleId1))[0]).to.equal(addrs[1]);
+
+    await expect(bevorProtocol.getVestingScheduleIdByAddressAndAudit(
+      addrs[2],
+      auditId,
     )).to.be.revertedWith("No vesting schedule found for this auditor in this audit");
   })
 });

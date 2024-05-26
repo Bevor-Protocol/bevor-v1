@@ -430,12 +430,12 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
             );
     }
 
-    function getVestingScheduleByAddressAndAudit(address auditor, uint256 auditId) public view returns (VestingSchedule memory) {
+    function getVestingScheduleIdByAddressAndAudit(address auditor, uint256 auditId) public view returns (uint256) {
       uint256[] storage schedules = auditToVesting[auditId];
       for (uint256 i = 0; i < schedules.length; i++) {
         VestingSchedule storage schedule = vestingSchedules[schedules[i]];
         if (schedule.auditor == auditor) {
-          return schedule;
+          return schedules[i];
         }
       }
       revert("No vesting schedule found for this auditor in this audit");
