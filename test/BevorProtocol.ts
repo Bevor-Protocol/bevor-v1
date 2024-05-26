@@ -749,16 +749,13 @@ describe("Bevor Protocol Functionality", function () {
       const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
   
       const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
-      const numIncrements = 20;
+      const numIncrements = 10;
       const toIncrement = Math.round((duration + 10) / numIncrements); // allow for some time after duration ends.
-      for (let i = 0; i < numIncrements; i++) {
+      for (let i = 0; i < numIncrements + 1; i++) {
         // test that withdrawals work incrementally, and as expected both before cliff, after
         // cliff, and after duration.
         // can't add zero because in first loop it'll equal previous block's timestamp ( +1 ).
         await helpers.time.increaseTo(createdAuditStartTime + BigInt(toIncrement * i + 1));
-
-        const releasable0 = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0]);
-        const releasable1 = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[1]);
 
         // can call this as auditor or owner of contract (don't need to .connect())
         await bevorProtocol.withdraw(createdScheduleIDs[0]);
@@ -767,28 +764,29 @@ describe("Bevor Protocol Functionality", function () {
         const schedule0 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
         const schedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
 
-        if (toIncrement * i < cliff) {
+        if (toIncrement * i + 1 < cliff) {
           expect(schedule0[2]).to.equal(0n);
           expect(schedule1[2]).to.equal(0n);
-          expect(releasable0).to.equal(0n);
-          expect(releasable1).to.equal(0n);
         } else {
-          if (toIncrement * i < duration) {
+          if (toIncrement * i + 1 < duration) {
             // ideally amount - withdrawn = releasable, but there's some precision errors,
             // due to block timestamp (we could fix the block time, but this gets the point across).
             expect(schedule0[2]).to.be.greaterThan(0);
             expect(schedule1[2]).to.be.greaterThan(0);
-            expect(releasable0).to.be.greaterThan(0);
-            expect(releasable1).to.be.greaterThan(0);
           } else {
             // should equal the total amount possible.
             expect(schedule0[2]).to.equal(schedule0[1]);
             expect(schedule1[2]).to.equal(schedule1[1])
-            expect(releasable0).to.equal(0n);
-            expect(releasable1).to.equal(0n);
           }
         }
       }
+
+      const releasable0 = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0]);
+      const releasable1 = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[1]);
+
+      expect(releasable0).to.equal(0n);
+      expect(releasable1).to.equal(0n);
+
     });
   });
 

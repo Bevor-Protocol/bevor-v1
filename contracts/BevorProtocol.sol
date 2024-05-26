@@ -511,6 +511,8 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         }
 
         uint256 currentTime = block.timestamp;
+        console.log(currentTime, parentAudit.cliff, parentAudit.start, parentAudit.duration);
+        console.log(vestingSchedule.amount, vestingSchedule.withdrawn);
         // If the current time is before the cliff, no tokens are releasable.
         if (currentTime < parentAudit.cliff + parentAudit.start) {
           return 0;
@@ -522,9 +524,10 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         }
         // Otherwise, some tokens are releasable.
         else {
-          uint256 m = vestingSchedule.amount / parentAudit.duration;
+          uint256 m = (vestingSchedule.amount * 1e18) / parentAudit.duration;
           uint256 x = currentTime - parentAudit.start;
-          uint256 y = m * x;
+          uint256 y = (m * x) / 1e18;
+          console.log(m, x, y);
           // Subtract the amount already released and return.
           uint256 releasable = y - vestingSchedule.withdrawn;
           return releasable;
