@@ -50,7 +50,7 @@ describe("Bevor Protocol Functionality", function () {
     await bevorProtocol.waitForDeployment();
   });
 
-  describe("AuditNFT", function () {
+  describe("Setup", () => {
     it("Audit constructor should transfer ownership to BevorProtocol", async () => {
 
       await auditNFT.transferOwnership(await bevorProtocol.getAddress());
@@ -108,6 +108,9 @@ describe("Bevor Protocol Functionality", function () {
       await testToken.connect(auditee).transferFrom(auditee, spender, amount);
       expect(await testToken.balanceOf(spender)).to.be.at.least(amount);
     });
+  });
+
+  describe("AuditNFT", function () {
 
     // following include some redundancy, but can't use reveal() unless minting occured
     it("Able to generate auditId", async () => {
@@ -364,7 +367,145 @@ describe("Bevor Protocol Functionality", function () {
         findings,
         randomId,
       )).to.be.revertedWith("Only the auditee can mint this NFT");
-    })
+    });
+  });
+
+  describe("Vesting", () => {
+
+    it("Works when cliff = 0", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 0;
+      const duration = 10000;
+      const details = "here are my details";
+      const amount = 100000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
+  
+      await testToken.transfer(auditee, amount + 10);
+  
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+  
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+  
+      // audit should not be marked as active.
+      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+  
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+      
+      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
+  
+      const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+  
+      // mines a new block that is still smaller than the cliff.
+      // await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff - 10));
+  
+      // Since duration was zero, this should almost immediately be available, just add 1s
+      await helpers.time.increaseTo(createdAuditStartTime + BigInt(1));
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
+  
+      // mines a new block that equal to the cliff, should start initial vesting.
+      await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 1));
+      
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(amount / 2);
+  
+    });
+
+    it("Test incremental release amounts", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 1000;
+      const duration = 10000;
+      const details = "here are my details";
+      const amount = 100000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
+  
+      await testToken.transfer(auditee, amount + 10);
+  
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+  
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+  
+      // audit should not be marked as active.
+      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+  
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+      
+      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
+  
+      const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+
+      let prevRelease = 0;
+      const numIncrements = 20;
+      const toIncrement = (duration - cliff) / numIncrements;
+      for (let i = 0; i < numIncrements; i++) {
+        // just to show that over time, releasable amount increases (without withdrawals).
+        // Cannot increment past the duration, otherwise releasable amount will be static.
+        await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff + toIncrement * i));
+        const newRelease = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0]);
+        expect(newRelease).to.be.greaterThan(prevRelease);
+        prevRelease = newRelease;
+      }
+    });
 
     it("Validate that vesting behavior works as expected", async () => {
       const bevorProtocolAddress = await bevorProtocol.getAddress();
@@ -406,11 +547,6 @@ describe("Bevor Protocol Functionality", function () {
 
       // start time should be zero
       expect((await bevorProtocol.audits(auditId))[5]).to.equal(0);
-      
-      const tokenId = await bevorProtocol.generateTokenId(
-        auditId,
-        findings,
-      )
 
       await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
       // await testToken.transfer(auditee, amount + 10);
@@ -463,14 +599,206 @@ describe("Bevor Protocol Functionality", function () {
         expect(releasable).to.equal(expectedRelease);
       }
     });
-  });
 
-  it("Confirm that withdrawals work", async () => {
+    it("Confirm that withdrawals work", async () => {
       const bevorProtocolAddress = await bevorProtocol.getAddress();
       await auditNFT.transferOwnership(bevorProtocolAddress);
       const tokenAddress = await testToken.getAddress();
       
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 1000;
+      const duration = 10000;
+      const details = "here are my details";
+      const amount = 100000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
 
+      await testToken.transfer(auditee, amount + 10);
+
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+      
+
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+
+      const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+
+      const vestingSchedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
+      const vestingSchedule2 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
+      const auditor1 = vestingSchedule1[0];
+      const auditor2 = vestingSchedule2[0];
+      
+      // protocol owner should've transferred all tokens to bevorProtocol
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+      expect(await testToken.balanceOf(auditee)).to.equal(10);
+      expect(await testToken.balanceOf(auditor1)).to.equal(0);
+
+      // should return nothing as cliff wasn't reached. Auditor should still have 0 funds.
+      await bevorProtocol.withdraw(createdScheduleIDs[0]);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+      expect(await testToken.balanceOf(auditor1)).to.equal(0);
+
+      // mines a new block equal to the cliff, should start initial vesting.
+      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
+      await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff));
+
+      let expectedRelease = (amount / duration) * cliff / createdScheduleIDs.length;
+      await bevorProtocol.withdraw(createdScheduleIDs[0]);
+
+      // we might be off some some precision value by the time the _computeReleasableAmount() is called
+      // allow for some delta of error.
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.be.closeTo(amount - expectedRelease, 10);
+      expect(await testToken.balanceOf(auditor1)).to.be.closeTo(expectedRelease, 10);
+
+      // simulate a block that occurs after the vesting period is over.
+      await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 10));
+
+      expectedRelease = amount / createdScheduleIDs.length;
+      await bevorProtocol.withdraw(createdScheduleIDs[0]);
+
+      // we allowed some some window of error by +10 to the duration, we can be precise now.
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(expectedRelease);
+      expect(await testToken.balanceOf(auditor1)).to.equal(expectedRelease);
+      expect(await testToken.balanceOf(auditor2)).to.equal(0);
+
+      // now let's say the 2nd auditor makes a withdrawal
+
+      await bevorProtocol.withdraw(createdScheduleIDs[1]);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(0);
+      expect(await testToken.balanceOf(auditor1)).to.equal(expectedRelease);
+      expect(await testToken.balanceOf(auditor2)).to.equal(expectedRelease);
+    });
+
+    it("Test incremental withdrawal amounts", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 1000;
+      const duration = 10000;
+      const details = "here are my details";
+      const amount = 100000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
+  
+      await testToken.transfer(auditee, amount + 10);
+  
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+  
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+  
+      // audit should not be marked as active.
+      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+  
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+      
+      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
+  
+      const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+      const numIncrements = 20;
+      const toIncrement = Math.round((duration + 10) / numIncrements); // allow for some time after duration ends.
+      for (let i = 0; i < numIncrements; i++) {
+        // test that withdrawals work incrementally, and as expected both before cliff, after
+        // cliff, and after duration.
+        // can't add zero because in first loop it'll equal previous block's timestamp ( +1 ).
+        await helpers.time.increaseTo(createdAuditStartTime + BigInt(toIncrement * i + 1));
+
+        const releasable0 = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0]);
+        const releasable1 = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[1]);
+
+        // can call this as auditor or owner of contract (don't need to .connect())
+        await bevorProtocol.withdraw(createdScheduleIDs[0]);
+        await bevorProtocol.withdraw(createdScheduleIDs[1]);
+
+        const schedule0 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
+        const schedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
+
+        if (toIncrement * i < cliff) {
+          expect(schedule0[2]).to.equal(0n);
+          expect(schedule1[2]).to.equal(0n);
+          expect(releasable0).to.equal(0n);
+          expect(releasable1).to.equal(0n);
+        } else {
+          if (toIncrement * i < duration) {
+            // ideally amount - withdrawn = releasable, but there's some precision errors,
+            // due to block timestamp (we could fix the block time, but this gets the point across).
+            expect(schedule0[2]).to.be.greaterThan(0);
+            expect(schedule1[2]).to.be.greaterThan(0);
+            expect(releasable0).to.be.greaterThan(0);
+            expect(releasable1).to.be.greaterThan(0);
+          } else {
+            // should equal the total amount possible.
+            expect(schedule0[2]).to.equal(schedule0[1]);
+            expect(schedule1[2]).to.equal(schedule1[1])
+            expect(releasable0).to.equal(0n);
+            expect(releasable1).to.equal(0n);
+          }
+        }
+      }
+    });
+  });
+
+  describe("DAO", () => {
+
+    it("Test vesting and dao behavior with freezing and unfreezing.", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
       const auditee = addr1;
       const auditors = [addrs[0], addrs[1]];
       const cliff = 1000;
@@ -535,204 +863,100 @@ describe("Bevor Protocol Functionality", function () {
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
       expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
-      // mines a new block equal to the cliff, should start initial vesting.
-      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
-      await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff));
+      // Make a proposal based on the vesting address
+      // await daoProxy.propose([await bevorProtocol.getAddress()], [1], [], "");
+      // await bevorProtocol.connect(auditee).setInvalidatingProposalId(auditId, 1);
+      await bevorProtocol.connect(auditee).proposeCancelVesting(auditId, "");
 
-      let expectedRelease = (amount / duration) * cliff / createdScheduleIDs.length;
-      await bevorProtocol.withdraw(createdScheduleIDs[0]);
+      await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
 
-      // we might be off some some precision value by the time the _computeReleasableAmount() is called
-      // allow for some delta of error.
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.be.closeTo(amount - expectedRelease, 10);
-      expect(await testToken.balanceOf(auditor1)).to.be.closeTo(expectedRelease, 10);
+      await daoProxy.setProposalFrozen(1, false);
+      await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(false);
 
-      // simulate a block that occurs after the vesting period is over.
-      await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 10));
+      await daoProxy.setProposalFrozen(1, true);
+      await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
+      
+      await daoProxy.setProposalInvalidated(1, true);
+      await expect(await daoProxy.isVestingInvalidated(1)).to.be.equal(true);
 
-      expectedRelease = amount / createdScheduleIDs.length;
-      await bevorProtocol.withdraw(createdScheduleIDs[0]);
+      // Check if the number of tokens at the bottom was just transferred to the protocolOwner
+      const protocolOwnerBalanceBefore = BigInt(await testToken.balanceOf(auditee));
+      await bevorProtocol.returnFundsAfterAuditInvalidation(auditId);
+      const protocolOwnerBalanceAfter = BigInt(await testToken.balanceOf(auditee));
+      const expectedTransferAmount = amount;
 
-      // we allowed some some window of error by +10 to the duration, we can be precise now.
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(expectedRelease);
-      expect(await testToken.balanceOf(auditor1)).to.equal(expectedRelease);
-      expect(await testToken.balanceOf(auditor2)).to.equal(0);
+      expect(protocolOwnerBalanceAfter - protocolOwnerBalanceBefore).to.equal(expectedTransferAmount);
+    });
+    
+    it("Public view for getting vesting schedule should work", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
 
-      // now let's say the 2nd auditor makes a withdrawal
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 1000;
+      const duration = 10000;
+      const details = "here are my details";
+      const amount = 100000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
 
-      await bevorProtocol.withdraw(createdScheduleIDs[1]);
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(0);
-      expect(await testToken.balanceOf(auditor1)).to.equal(expectedRelease);
-      expect(await testToken.balanceOf(auditor2)).to.equal(expectedRelease);
+      await testToken.transfer(auditee, amount + 10);
+
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+
+      // start time should be zero
+      expect((await bevorProtocol.audits(auditId))[5]).to.equal(0);
+      
+      const tokenId = await bevorProtocol.generateTokenId(
+        auditId,
+        findings,
+      )
+
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+
+      const vestingScheduleId0 = await bevorProtocol.getVestingScheduleIdByAddressAndAudit(
+        addrs[0],
+        auditId,
+      );
+
+      expect((await bevorProtocol.vestingSchedules(vestingScheduleId0))[0]).to.equal(addrs[0]);
+
+      const vestingScheduleId1 = await bevorProtocol.getVestingScheduleIdByAddressAndAudit(
+        addrs[1],
+        auditId,
+      );
+
+      expect((await bevorProtocol.vestingSchedules(vestingScheduleId1))[0]).to.equal(addrs[1]);
+
+      await expect(bevorProtocol.getVestingScheduleIdByAddressAndAudit(
+        addrs[2],
+        auditId,
+      )).to.be.revertedWith("No vesting schedule found for this auditor in this audit");
+    })
   });
-
-  it("Test vesting and dao behavior with freezing and unfreezing.", async () => {
-    const bevorProtocolAddress = await bevorProtocol.getAddress();
-    await auditNFT.transferOwnership(bevorProtocolAddress);
-    const tokenAddress = await testToken.getAddress();
-    
-
-    const auditee = addr1;
-    const auditors = [addrs[0], addrs[1]];
-    const cliff = 1000;
-    const duration = 10000;
-    const details = "here are my details";
-    const amount = 100000;
-    const salt = "some random salt";
-    const findings = ["finding 1", "finding 2"];
-
-    await testToken.transfer(auditee, amount + 10);
-
-    const auditId = await bevorProtocol.generateAuditId(
-      auditee,
-      auditors,
-      cliff,
-      duration,
-      details,
-      amount,
-      tokenAddress,
-      salt
-    )
-
-    await bevorProtocol.connect(auditee).prepareAudit(
-      auditors,
-      cliff,
-      duration,
-      details,
-      amount,
-      tokenAddress,
-      salt,
-    )
-    
-    const tokenId = await bevorProtocol.generateTokenId(
-      auditId,
-      findings,
-    )
-
-    await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
-    // await testToken.transfer(auditee, amount + 10);
-    // await testToken.connect(auditee).approve(auditee, amount);
-    // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
-
-    await bevorProtocol.connect(auditee).revealFindings(
-      findings,
-      auditId,
-    )
-
-    const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
-
-    const vestingSchedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
-    const vestingSchedule2 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
-    const auditor1 = vestingSchedule1[0];
-    const auditor2 = vestingSchedule2[0];
-    
-    // protocol owner should've transferred all tokens to bevorProtocol
-    expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
-    expect(await testToken.balanceOf(auditee)).to.equal(10);
-    expect(await testToken.balanceOf(auditor1)).to.equal(0);
-
-    // should return nothing as cliff wasn't reached. Auditor should still have 0 funds.
-    await bevorProtocol.withdraw(createdScheduleIDs[0]);
-    expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
-    expect(await testToken.balanceOf(auditor1)).to.equal(0);
-
-    // Make a proposal based on the vesting address
-    // await daoProxy.propose([await bevorProtocol.getAddress()], [1], [], "");
-    // await bevorProtocol.connect(auditee).setInvalidatingProposalId(auditId, 1);
-    await bevorProtocol.connect(auditee).proposeCancelVesting(auditId, "");
-
-    let pid = await bevorProtocol.audits(auditId);
-    console.log(`Invalidating Proposal ID: ${pid}`);
-    await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
-
-    await daoProxy.setProposalFrozen(1, false);
-    await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(false);
-
-    await daoProxy.setProposalFrozen(1, true);
-    await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
-    
-    await daoProxy.setProposalInvalidated(1, true);
-    await expect(await daoProxy.isVestingInvalidated(1)).to.be.equal(true);
-
-    // Check if the number of tokens at the bottom was just transferred to the protocolOwner
-    const protocolOwnerBalanceBefore = BigInt(await testToken.balanceOf(auditee));
-    await bevorProtocol.returnFundsAfterAuditInvalidation(auditId);
-    const protocolOwnerBalanceAfter = BigInt(await testToken.balanceOf(auditee));
-    const expectedTransferAmount = amount;
-    console.log(`Protocol Owner Balance Before: ${protocolOwnerBalanceBefore}`);
-    console.log(`Protocol Owner Balance After: ${protocolOwnerBalanceAfter}`);
-    console.log(`Expected Transfer Amount: ${expectedTransferAmount}`);
-    expect(protocolOwnerBalanceAfter - protocolOwnerBalanceBefore).to.equal(expectedTransferAmount);
-  });
-  
-  it("Public view for getting vesting schedule should work", async () => {
-    const bevorProtocolAddress = await bevorProtocol.getAddress();
-    await auditNFT.transferOwnership(bevorProtocolAddress);
-    const tokenAddress = await testToken.getAddress();
-    
-
-    const auditee = addr1;
-    const auditors = [addrs[0], addrs[1]];
-    const cliff = 1000;
-    const duration = 10000;
-    const details = "here are my details";
-    const amount = 100000;
-    const salt = "some random salt";
-    const findings = ["finding 1", "finding 2"];
-
-    await testToken.transfer(auditee, amount + 10);
-
-    const auditId = await bevorProtocol.generateAuditId(
-      auditee,
-      auditors,
-      cliff,
-      duration,
-      details,
-      amount,
-      tokenAddress,
-      salt
-    )
-
-    await bevorProtocol.connect(auditee).prepareAudit(
-      auditors,
-      cliff,
-      duration,
-      details,
-      amount,
-      tokenAddress,
-      salt,
-    )
-
-    // start time should be zero
-    expect((await bevorProtocol.audits(auditId))[5]).to.equal(0);
-    
-    const tokenId = await bevorProtocol.generateTokenId(
-      auditId,
-      findings,
-    )
-
-    await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
-    // await testToken.transfer(auditee, amount + 10);
-    // await testToken.connect(auditee).approve(auditee, amount);
-    // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
-
-    const vestingScheduleId0 = await bevorProtocol.getVestingScheduleIdByAddressAndAudit(
-      addrs[0],
-      auditId,
-    );
-
-    expect((await bevorProtocol.vestingSchedules(vestingScheduleId0))[0]).to.equal(addrs[0]);
-
-    const vestingScheduleId1 = await bevorProtocol.getVestingScheduleIdByAddressAndAudit(
-      addrs[1],
-      auditId,
-    );
-
-    expect((await bevorProtocol.vestingSchedules(vestingScheduleId1))[0]).to.equal(addrs[1]);
-
-    await expect(bevorProtocol.getVestingScheduleIdByAddressAndAudit(
-      addrs[2],
-      auditId,
-    )).to.be.revertedWith("No vesting schedule found for this auditor in this audit");
-  })
 });
