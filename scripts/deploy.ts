@@ -2,7 +2,8 @@ import { ethers } from "hardhat";
 
 async function main() {
 
-  const totalSupply = 1000000;
+  const totalSupply = 1_000_000;
+  const totalSupplyCorrected = ethers.parseUnits(totalSupply.toString(), 18);
 
   const Token = await ethers.getContractFactory("ERC20Token");
   const TL = await ethers.getContractFactory("BevorTimelockController");
@@ -10,7 +11,7 @@ async function main() {
   const Audit = await ethers.getContractFactory("Audit");
   const BevorProtocol = await ethers.getContractFactory("BevorProtocol");
 
-  const testToken = await Token.deploy(totalSupply, "Test Token", "TT");
+  const testToken = await Token.deploy(totalSupplyCorrected, "Test Token", "TT");
   await testToken.waitForDeployment();
   
   const timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
