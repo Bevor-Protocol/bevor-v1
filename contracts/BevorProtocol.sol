@@ -129,6 +129,9 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         require(amount > 0, "TokenVesting: amount must be > 0");
         require(duration >= cliff, "TokenVesting: duration must be >= cliff");
 
+        uint256 decimals = ERC20(token).decimals();
+
+        // we handle the decimal conversion within generateAuditId() directly.
         uint256 auditId = generateAuditId(
           msg.sender,
           auditors,
@@ -143,7 +146,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         audits[auditId] = Audit(
           msg.sender,
           token,
-          amount,
+          amount * (10 ** decimals),
           duration,
           cliff,
           0,
@@ -154,6 +157,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         uint256[] memory auditorArr = new uint256[](auditors.length);
 
         for (uint256 i = 0; i < auditors.length; i++) {
+          // we'll assume identical payout per auditor.
           address auditor = auditors[i];
           uint256 vestingScheduleId = computeNextVestingScheduleIdForHolder(auditor);
           uint256 currentVestingCount = holdersVestingCount[auditor];
@@ -164,7 +168,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
 
           vestingSchedules[vestingScheduleId] = VestingSchedule(
             auditor,
-            amount / auditors.length,
+            amount * (10 ** decimals) / auditors.length,
             0,
             auditId
           );
@@ -182,7 +186,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param cliff The cliff period in seconds.
      * @param duration The duration of the vesting period in seconds.
      * @param details The hash of the provided audit details.
-     * @param amountTotal The total amount of tokens to be released at the end of the vesting.
+     * @param amount The total amount of tokens to be released at the end of the vesting.
      * @param token The address of the ERC20 token being vested.
      * @param salt The random salt uint256
      * @return The keccak256 hash of the concatenated vesting data.
@@ -193,17 +197,18 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         uint256 cliff,
         uint256 duration,
         string  memory details,
-        uint256 amountTotal,
+        uint256 amount,
         ERC20 token,
         string memory salt
-    ) public pure returns (uint256) {
+    ) public view returns (uint256) {
+        uint256 decimals = ERC20(token).decimals();
         return uint256(keccak256(abi.encodePacked(
             auditee,
             auditors,
             cliff,
             duration,
             details,
-            amountTotal,
+            amount * (10 ** decimals),
             token,
             salt
         )));
@@ -366,18 +371,6 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
     }
 
-    function _auditContainsAuditor(uint256 auditId, address auditor) internal view returns(bool) {
-        uint256[] storage schedules = auditToVesting[auditId];
-        
-        for (uint256 i = 0; i < schedules.length; i++) {
-          VestingSchedule storage schedule = vestingSchedules[schedules[i]];
-          if (schedule.auditor == auditor) {
-            return true;
-          }
-        }
-        return false;
-    } 
-
     /**
      * @dev Returns the number of vesting schedules associated to an auditor.
      * @param _auditor address of auditor
@@ -511,8 +504,6 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         }
 
         uint256 currentTime = block.timestamp;
-        console.log(currentTime, parentAudit.cliff, parentAudit.start, parentAudit.duration);
-        console.log(vestingSchedule.amount, vestingSchedule.withdrawn);
         // If the current time is before the cliff, no tokens are releasable.
         if (currentTime < parentAudit.cliff + parentAudit.start) {
           return 0;
@@ -524,10 +515,9 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         }
         // Otherwise, some tokens are releasable.
         else {
-          uint256 m = (vestingSchedule.amount * 1e18) / parentAudit.duration;
+          uint256 m = vestingSchedule.amount / parentAudit.duration;
           uint256 x = currentTime - parentAudit.start;
-          uint256 y = (m * x) / 1e18;
-          console.log(m, x, y);
+          uint256 y = m * x;
           // Subtract the amount already released and return.
           uint256 releasable = y - vestingSchedule.withdrawn;
           return releasable;
