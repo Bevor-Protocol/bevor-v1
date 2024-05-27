@@ -21,7 +21,8 @@ describe("Bevor Protocol Functionality", function () {
   let addr1: any;
   let addr2: any;
   let addrs: any;
-  const totalSupply = BigInt(1000000);
+  const totalSupply = 1_000_000;
+  const totalSupplyUnits = ethers.parseUnits(totalSupply.toString(), 18);
 
   before(async function () {
     Token = await ethers.getContractFactory("ERC20Token");
@@ -34,7 +35,7 @@ describe("Bevor Protocol Functionality", function () {
   beforeEach(async function () {
     [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
     
-    testToken = await Token.deploy(totalSupply, "Test Token", "TT");
+    testToken = await Token.deploy(totalSupplyUnits, "Test Token", "TT");
     await testToken.waitForDeployment();
     
     timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
@@ -259,14 +260,16 @@ describe("Bevor Protocol Functionality", function () {
 
       const auditee = addr1;
       const auditors = [addrs[0], addrs[1]];
-      const cliff = 1000;
-      const duration = 10000;
+      const cliff = 1_000;
+      const duration = 10_000;
       const details = "here are my details";
-      const amount = 100000;
+      const amount = 10_000;
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
 
-      await testToken.transfer(auditee, amount + 10);
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected);
 
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -297,7 +300,7 @@ describe("Bevor Protocol Functionality", function () {
         findings,
       )
 
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -330,7 +333,9 @@ describe("Bevor Protocol Functionality", function () {
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
 
-      await testToken.transfer(auditee, amount + 10);
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected);
 
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -361,7 +366,7 @@ describe("Bevor Protocol Functionality", function () {
         findings,
       )
 
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
 
       await expect(bevorProtocol.connect(auditee).revealFindings(
         findings,
@@ -385,8 +390,10 @@ describe("Bevor Protocol Functionality", function () {
       const amount = 100000;
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
+
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
   
-      await testToken.transfer(auditee, amount + 10);
+      await testToken.transfer(auditee, amountCorrected);
   
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -412,7 +419,7 @@ describe("Bevor Protocol Functionality", function () {
       // audit should not be marked as active.
       expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
       
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -436,7 +443,7 @@ describe("Bevor Protocol Functionality", function () {
       // mines a new block that equal to the cliff, should start initial vesting.
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 1));
       
-      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(amount / 2);
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(amountCorrected / BigInt(2));
   
     });
 
@@ -458,8 +465,13 @@ describe("Bevor Protocol Functionality", function () {
       // cliff can even be zero here.
       const cliff = 1;
       const amount = 1000;
+
+      // utilizing the decimals should fix, this is largely what passes the test.
+      // we also internalize much of the decimals logic, as ERC20 passed to the contract
+      // can be arbitrary.
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
   
-      await testToken.transfer(auditee, amount + 1);
+      await testToken.transfer(auditee, amountCorrected);
   
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -485,7 +497,7 @@ describe("Bevor Protocol Functionality", function () {
       // audit should not be marked as active.
       expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
       
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -512,14 +524,16 @@ describe("Bevor Protocol Functionality", function () {
       
       const auditee = addr1;
       const auditors = [addrs[0], addrs[1]];
-      const cliff = 1000;
-      const duration = 10000;
+      const cliff = 1_000;
+      const duration = 10_000;
       const details = "here are my details";
-      const amount = 100000;
+      const amount = 100_000;
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
+
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
   
-      await testToken.transfer(auditee, amount + 10);
+      await testToken.transfer(auditee, amountCorrected);
   
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -545,7 +559,7 @@ describe("Bevor Protocol Functionality", function () {
       // audit should not be marked as active.
       expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
       
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -580,14 +594,16 @@ describe("Bevor Protocol Functionality", function () {
 
       const auditee = addr1;
       const auditors = [addrs[0], addrs[1]];
-      const cliff = 1000;
-      const duration = 10000;
+      const cliff = 1_000;
+      const duration = 10_000;
       const details = "here are my details";
-      const amount = 100000;
+      const amount = 100_000;
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
 
-      await testToken.transfer(auditee, amount + 10);
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected);
 
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -613,7 +629,7 @@ describe("Bevor Protocol Functionality", function () {
       // start time should be zero
       expect((await bevorProtocol.audits(auditId))[5]).to.equal(0);
 
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -639,7 +655,10 @@ describe("Bevor Protocol Functionality", function () {
       // mines a new block that equal to the cliff, should start initial vesting.
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff));
       
-      expectedRelease = (amount / duration) * cliff / createdScheduleIDs.length;
+      expectedRelease = ethers.parseUnits(
+        ((amount / duration) * cliff / createdScheduleIDs.length).toString(),
+        18,
+      );
       for (let i = 0; i < createdScheduleIDs.length; i++){
         const releasable = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[i]);
         expect(releasable).to.equal(expectedRelease);
@@ -649,7 +668,10 @@ describe("Bevor Protocol Functionality", function () {
       // mines a new block to right before ending duration of vest.
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration - 10));
       
-      expectedRelease = (amount / duration) * (duration - 10) / createdScheduleIDs.length;
+      expectedRelease = ethers.parseUnits(
+        ((amount / duration) * (duration - 10) / createdScheduleIDs.length).toString(),
+        18,
+      );
       for (let i = 0; i < createdScheduleIDs.length; i++){
         const releasable = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[i]);
         expect(releasable).to.equal(expectedRelease);
@@ -658,7 +680,7 @@ describe("Bevor Protocol Functionality", function () {
       // mines a new block to right before ending duration of vest.
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 10));
       
-      expectedRelease = amount / createdScheduleIDs.length;
+      expectedRelease = ethers.parseUnits((amount / createdScheduleIDs.length).toString(), 18);
       for (let i = 0; i < createdScheduleIDs.length; i++){
         const releasable = await bevorProtocol.computeReleasableAmount(createdScheduleIDs[i]);
         expect(releasable).to.equal(expectedRelease);
@@ -672,14 +694,16 @@ describe("Bevor Protocol Functionality", function () {
       
       const auditee = addr1;
       const auditors = [addrs[0], addrs[1]];
-      const cliff = 1000;
-      const duration = 10000;
+      const cliff = 1_000;
+      const duration = 10_000;
       const details = "here are my details";
-      const amount = 100000;
+      const amount = 100_000;
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
 
-      await testToken.transfer(auditee, amount + 10);
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected + BigInt(10));
 
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -703,7 +727,7 @@ describe("Bevor Protocol Functionality", function () {
       )
       
 
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -721,31 +745,34 @@ describe("Bevor Protocol Functionality", function () {
       const auditor2 = vestingSchedule2[0];
       
       // protocol owner should've transferred all tokens to bevorProtocol
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amountCorrected);
       expect(await testToken.balanceOf(auditee)).to.equal(10);
       expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
       // should return nothing as cliff wasn't reached. Auditor should still have 0 funds.
       await bevorProtocol.withdraw(createdScheduleIDs[0]);
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amountCorrected);
       expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
       // mines a new block equal to the cliff, should start initial vesting.
       const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff));
 
-      let expectedRelease = (amount / duration) * cliff / createdScheduleIDs.length;
+      let expectedRelease = ethers.parseUnits(
+        ((amount / duration) * cliff / createdScheduleIDs.length).toString(),
+        18,
+      );
       await bevorProtocol.withdraw(createdScheduleIDs[0]);
 
       // we might be off some some precision value by the time the _computeReleasableAmount() is called
       // allow for some delta of error.
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.be.closeTo(amount - expectedRelease, 10);
-      expect(await testToken.balanceOf(auditor1)).to.be.closeTo(expectedRelease, 10);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.be.closeTo(amountCorrected - expectedRelease, BigInt(10 * 10 ** 18));
+      expect(await testToken.balanceOf(auditor1)).to.be.closeTo(expectedRelease, BigInt(10 * 10 ** 18));
 
       // simulate a block that occurs after the vesting period is over.
       await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 10));
 
-      expectedRelease = amount / createdScheduleIDs.length;
+      expectedRelease = ethers.parseUnits((amount / createdScheduleIDs.length).toString(), 18);
       await bevorProtocol.withdraw(createdScheduleIDs[0]);
 
       // we allowed some some window of error by +10 to the duration, we can be precise now.
@@ -774,8 +801,10 @@ describe("Bevor Protocol Functionality", function () {
       const amount = 100000;
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
+
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
   
-      await testToken.transfer(auditee, amount + 10);
+      await testToken.transfer(auditee, amountCorrected);
   
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -801,7 +830,7 @@ describe("Bevor Protocol Functionality", function () {
       // audit should not be marked as active.
       expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
       
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -871,7 +900,9 @@ describe("Bevor Protocol Functionality", function () {
       const salt = "some random salt";
       const findings = ["finding 1", "finding 2"];
 
-      await testToken.transfer(auditee, amount + 10);
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected + BigInt(10));
 
       const auditId = await bevorProtocol.generateAuditId(
         auditee,
@@ -893,13 +924,8 @@ describe("Bevor Protocol Functionality", function () {
         tokenAddress,
         salt,
       )
-      
-      const tokenId = await bevorProtocol.generateTokenId(
-        auditId,
-        findings,
-      )
 
-      await testToken.connect(auditee).approve(bevorProtocolAddress, amount);
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
@@ -917,13 +943,13 @@ describe("Bevor Protocol Functionality", function () {
       const auditor2 = vestingSchedule2[0];
       
       // protocol owner should've transferred all tokens to bevorProtocol
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amountCorrected);
       expect(await testToken.balanceOf(auditee)).to.equal(10);
       expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
       // should return nothing as cliff wasn't reached. Auditor should still have 0 funds.
       await bevorProtocol.withdraw(createdScheduleIDs[0]);
-      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amount);
+      expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amountCorrected);
       expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
       // Make a proposal based on the vesting address
@@ -946,7 +972,7 @@ describe("Bevor Protocol Functionality", function () {
       const protocolOwnerBalanceBefore = BigInt(await testToken.balanceOf(auditee));
       await bevorProtocol.returnFundsAfterAuditInvalidation(auditId);
       const protocolOwnerBalanceAfter = BigInt(await testToken.balanceOf(auditee));
-      const expectedTransferAmount = amount;
+      const expectedTransferAmount = amountCorrected;
 
       expect(protocolOwnerBalanceAfter - protocolOwnerBalanceBefore).to.equal(expectedTransferAmount);
     });
