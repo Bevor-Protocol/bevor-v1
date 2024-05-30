@@ -26,6 +26,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       uint256 duration;
       uint256 cliff;
       uint256 start;
+      uint256 nftTokenId;
       uint256 invalidatingProposalId;
       bool isActive;
     }
@@ -151,6 +152,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
           cliff,
           0,
           0,
+          0,
           false
         );
 
@@ -269,6 +271,8 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         uint256 tokenId = generateTokenId(auditId, findings);
 
         IAudit(nft).mint(msg.sender, tokenId);
+
+        targetAudit.nftTokenId = tokenId;
     }
 
     /**
