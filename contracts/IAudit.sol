@@ -15,6 +15,11 @@ interface IAudit is IERC721 {
     function mint(address _to, uint256 tokenId) external;
 
     /**
+     * @dev Destroys the audit.
+     */
+    function burn(uint256 tokenId) external;
+
+    /**
      * @dev Creates a new agreement
      */
     function trustlessHandoff(address _from, address _to, uint256 _tokenId) external;
