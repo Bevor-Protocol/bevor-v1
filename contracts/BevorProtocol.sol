@@ -534,6 +534,11 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         return 0;
       }
 
+      if (isWithdrawPaused(vestingSchedule.auditId)) {
+        // captures those that are frozen.
+        return 0;
+      }
+
       uint256 currentTime = block.timestamp;
       // If the current time is before the cliff, no tokens are releasable.
       if (currentTime < parentAudit.cliff + parentAudit.start) {
