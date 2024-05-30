@@ -1117,7 +1117,7 @@ describe("Bevor Protocol Functionality", function () {
       // propose an invalidation
       await bevorProtocol.connect(auditee).proposeInvalidation(auditId, "");
 
-      const proposalId = (await bevorProtocol.audits(auditId))[7];
+      await bevorProtocol.invalidate(auditId);
 
       // confirm burn mechanism works.
       await expect(auditNFT.ownerOf(tokenId)).to.be.revertedWith("ERC721: invalid token ID");
