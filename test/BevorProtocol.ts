@@ -318,6 +318,65 @@ describe("Bevor Protocol Functionality", function () {
       expect(await auditNFT.tokenOfOwnerByIndex(auditee, 0)).to.equal(tokenId);
     });
 
+    it("struct audit NFT id matches expectation", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
+
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 1_000;
+      const duration = 10_000;
+      const details = "here are my details";
+      const amount = 10_000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
+
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected);
+
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+
+      // start time should be zero
+      expect((await bevorProtocol.audits(auditId))[5]).to.equal(0);
+      
+      const tokenId = await bevorProtocol.generateTokenId(
+        auditId,
+        findings,
+      )
+
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
+
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+
+      expect((await bevorProtocol.audits(auditId))[6]).to.equal(tokenId);
+      expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
+    });
+
     it("Can't spoof auditId in mint()", async () => {
       const bevorProtocolAddress = await bevorProtocol.getAddress();
       await auditNFT.transferOwnership(bevorProtocolAddress);
@@ -417,7 +476,7 @@ describe("Bevor Protocol Functionality", function () {
       )
   
       // audit should not be marked as active.
-      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      expect((await bevorProtocol.audits(auditId))[8]).to.equal(false);
       
       await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
@@ -495,7 +554,7 @@ describe("Bevor Protocol Functionality", function () {
       )
   
       // audit should not be marked as active.
-      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      expect((await bevorProtocol.audits(auditId))[8]).to.equal(false);
       
       await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
@@ -557,7 +616,7 @@ describe("Bevor Protocol Functionality", function () {
       )
   
       // audit should not be marked as active.
-      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      expect((await bevorProtocol.audits(auditId))[8]).to.equal(false);
       
       await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
@@ -828,7 +887,7 @@ describe("Bevor Protocol Functionality", function () {
       )
   
       // audit should not be marked as active.
-      expect((await bevorProtocol.audits(auditId))[7]).to.equal(false);
+      expect((await bevorProtocol.audits(auditId))[8]).to.equal(false);
       
       await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
       // await testToken.transfer(auditee, amount + 10);
@@ -886,7 +945,7 @@ describe("Bevor Protocol Functionality", function () {
 
   describe("DAO", () => {
 
-    it("Test vesting and dao behavior with freezing and unfreezing.", async () => {
+    it("Able to propose and cancel an invalidation of an audit, withdrawals pause", async () => {
       const bevorProtocolAddress = await bevorProtocol.getAddress();
       await auditNFT.transferOwnership(bevorProtocolAddress);
       const tokenAddress = await testToken.getAddress();
@@ -930,6 +989,11 @@ describe("Bevor Protocol Functionality", function () {
       // await testToken.connect(auditee).approve(auditee, amount);
       // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
 
+      const tokenId = await bevorProtocol.generateTokenId(
+        auditId,
+        findings,
+      )
+
       await bevorProtocol.connect(auditee).revealFindings(
         findings,
         auditId,
@@ -952,29 +1016,115 @@ describe("Bevor Protocol Functionality", function () {
       expect(await testToken.balanceOf(bevorProtocolAddress)).to.equal(amountCorrected);
       expect(await testToken.balanceOf(auditor1)).to.equal(0);
 
-      // Make a proposal based on the vesting address
-      // await daoProxy.propose([await bevorProtocol.getAddress()], [1], [], "");
-      // await bevorProtocol.connect(auditee).setInvalidatingProposalId(auditId, 1);
-      await bevorProtocol.connect(auditee).proposeCancelVesting(auditId, "");
+      // Mine an Empty Block AFTER the cliff. Confirm that there is some withdrawable amount
+      const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
+      await helpers.time.increaseTo(createdAuditStartTime + BigInt(cliff + 100));
+      // check the releasable amount. should be greater than zero. Don't withdraw.
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0); 
 
-      await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
+      expect((await bevorProtocol.audits(auditId))[7]).to.equal(0);
+      expect(await bevorProtocol.isWithdrawPaused(auditId)).to.equal(false);
+      expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
 
-      await daoProxy.setProposalFrozen(1, false);
-      await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(false);
+      // propose an invalidation
+      await bevorProtocol.connect(auditee).proposeInvalidation(auditId, "");
 
-      await daoProxy.setProposalFrozen(1, true);
-      await expect(await bevorProtocol.isWithdrawPaused(auditId)).to.be.equal(true);
+      const proposalId = (await bevorProtocol.audits(auditId))[7];
+
+      expect(proposalId).to.not.equal(0);
+      expect(await bevorProtocol.isWithdrawPaused(auditId)).to.equal(true);
+      expect(await daoProxy.isVestingInvalidated(proposalId)).to.equal(false);
+
+      // releasable amount should equal zero since withdrawal is frozen.
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(0); 
+
+      // cancel the proposal (as deployer of contract)
+      await bevorProtocol.cancelProposal(auditId);
+
+      expect((await bevorProtocol.audits(auditId))[7]).to.not.equal(0);
+      expect(await bevorProtocol.isWithdrawPaused(auditId)).to.equal(false);
+      // now there should be a releasable amount again, since proposal is not frozen.
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
       
-      await daoProxy.setProposalInvalidated(1, true);
-      await expect(await daoProxy.isVestingInvalidated(1)).to.be.equal(true);
+      // trying to re-propose an invalidation for the same audit should revert.
+      await expect(bevorProtocol.connect(auditee).proposeInvalidation(auditId, ""))
+      .to.be.revertedWith("Cannot set the cancellation proposal more than once");
+    });
 
-      // Check if the number of tokens at the bottom was just transferred to the protocolOwner
-      const protocolOwnerBalanceBefore = BigInt(await testToken.balanceOf(auditee));
-      await bevorProtocol.returnFundsAfterAuditInvalidation(auditId);
-      const protocolOwnerBalanceAfter = BigInt(await testToken.balanceOf(auditee));
-      const expectedTransferAmount = amountCorrected;
+    it("Able to completely invalidate an audit", async () => {
+      const bevorProtocolAddress = await bevorProtocol.getAddress();
+      await auditNFT.transferOwnership(bevorProtocolAddress);
+      const tokenAddress = await testToken.getAddress();
+      
+      const auditee = addr1;
+      const auditors = [addrs[0], addrs[1]];
+      const cliff = 1000;
+      const duration = 10000;
+      const details = "here are my details";
+      const amount = 100000;
+      const salt = "some random salt";
+      const findings = ["finding 1", "finding 2"];
 
-      expect(protocolOwnerBalanceAfter - protocolOwnerBalanceBefore).to.equal(expectedTransferAmount);
+      const amountCorrected = ethers.parseUnits(amount.toString(), 18);
+
+      await testToken.transfer(auditee, amountCorrected + BigInt(10));
+
+      const auditId = await bevorProtocol.generateAuditId(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt
+      )
+
+      await bevorProtocol.connect(auditee).prepareAudit(
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        tokenAddress,
+        salt,
+      )
+
+      await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
+      // await testToken.transfer(auditee, amount + 10);
+      // await testToken.connect(auditee).approve(auditee, amount);
+      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
+
+      const tokenId = await bevorProtocol.generateTokenId(
+        auditId,
+        findings,
+      )
+
+      await bevorProtocol.connect(auditee).revealFindings(
+        findings,
+        auditId,
+      )
+
+      const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
+
+      const vestingSchedule1 = await bevorProtocol.vestingSchedules(createdScheduleIDs[0]);
+      const vestingSchedule2 = await bevorProtocol.vestingSchedules(createdScheduleIDs[1]);
+      const auditor1 = vestingSchedule1[0];
+      const auditor2 = vestingSchedule2[0];
+
+      expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
+      expect(await testToken.balanceOf(auditee)).to.equal(BigInt(10));
+      // propose an invalidation
+      await bevorProtocol.connect(auditee).proposeInvalidation(auditId, "");
+
+      await bevorProtocol.invalidate(auditId);
+
+      // confirm burn mechanism works.
+      await expect(auditNFT.ownerOf(tokenId)).to.be.revertedWith("ERC721: invalid token ID");
+      // confirm no releasable amount.
+      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(0); 
+      // confirm transfer of tokens back to auditee.
+      expect(await testToken.balanceOf(auditee)).to.equal(amountCorrected + BigInt(10))
     });
     
     it("Public view for getting vesting schedule should work", async () => {

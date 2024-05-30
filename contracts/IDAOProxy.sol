@@ -9,6 +9,17 @@ import "@openzeppelin/contracts/governance/IGovernor.sol";
 interface IDAOProxy {
 
     /**
+      * Update the proposal withdraw status.
+      *
+      */
+    function setProposalFrozen(uint256 proposalId, bool frozen) external;
+
+    /** 
+     * Mark an audit as invalidated.
+    */
+    function setProposalInvalidated(uint256 proposalId, bool invalidated) external;
+
+    /**
       * Returns whether the proposal is in the voting state
       *
       */

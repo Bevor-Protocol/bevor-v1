@@ -26,15 +26,16 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       uint256 duration;
       uint256 cliff;
       uint256 start;
+      uint256 nftTokenId;
       uint256 invalidatingProposalId;
       bool isActive;
     }
 
     struct VestingSchedule {
-        address auditor;
-        uint256 amount;
-        uint256 withdrawn;
-        uint256 auditId;
+      address auditor;
+      uint256 amount;
+      uint256 withdrawn;
+      uint256 auditId;
     }
 
     uint256[] public vestingSchedulesIds;
@@ -46,27 +47,27 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     address public dao;
 
     enum ProposalState {
-        Pending,
-        Active,
-        Canceled,
-        Defeated,
-        Succeeded,
-        Queued,
-        Expired,
-        Executed
+      Pending,
+      Active,
+      Canceled,
+      Defeated,
+      Succeeded,
+      Queued,
+      Expired,
+      Executed
     }
 
     event VestingScheduleCreated(
-        address indexed ProtocolOwner,
-        address indexed auditor,
-        string finding,
-        uint256 cliff,
-        uint256 start,
-        uint256 duration,
-        uint256 slicePeriodSeconds,
-        uint256 amountTotal,
-        ERC20 token,
-        uint256 tokenId
+      address indexed ProtocolOwner,
+      address indexed auditor,
+      string finding,
+      uint256 cliff,
+      uint256 start,
+      uint256 duration,
+      uint256 slicePeriodSeconds,
+      uint256 amountTotal,
+      ERC20 token,
+      uint256 tokenId
     );
 
     /**
@@ -80,16 +81,16 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param dao_ address of the Bevor DAO that controls
      */
     constructor(address dao_, address nft_) {
-        // Check that the token address is not 0x0.
-        require(address(dao_) != address(0x0));
-        require(address(nft_) != address(0x0));
-        dao = dao_;
-        nft = nft_;
+      // Check that the token address is not 0x0.
+      require(address(dao_) != address(0x0));
+      require(address(nft_) != address(0x0));
+      dao = dao_;
+      nft = nft_;
     }
 
     modifier onlyDAO() {
-        require(msg.sender == address(dao));
-            _;
+      require(msg.sender == address(dao));
+        _;
     }
 
     /**
@@ -123,60 +124,61 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       ERC20 token,
       string memory salt
     ) public {
-        require(bytes(details).length > 0, "details must be provided");
-        require(auditors.length > 0, "at least 1 auditor must be provided");
-        require(duration > 0, "TokenVesting: duration must be > 0");
-        require(amount > 0, "TokenVesting: amount must be > 0");
-        require(duration >= cliff, "TokenVesting: duration must be >= cliff");
+      require(bytes(details).length > 0, "details must be provided");
+      require(auditors.length > 0, "at least 1 auditor must be provided");
+      require(duration > 0, "TokenVesting: duration must be > 0");
+      require(amount > 0, "TokenVesting: amount must be > 0");
+      require(duration >= cliff, "TokenVesting: duration must be >= cliff");
 
-        uint256 decimals = ERC20(token).decimals();
+      uint256 decimals = ERC20(token).decimals();
 
-        // we handle the decimal conversion within generateAuditId() directly.
-        uint256 auditId = generateAuditId(
-          msg.sender,
-          auditors,
-          cliff,
-          duration,
-          details,
-          amount,
-          token,
-          salt
-        );
+      // we handle the decimal conversion within generateAuditId() directly.
+      uint256 auditId = generateAuditId(
+        msg.sender,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount,
+        token,
+        salt
+      );
 
-        audits[auditId] = Audit(
-          msg.sender,
-          token,
-          amount * (10 ** decimals),
-          duration,
-          cliff,
+      audits[auditId] = Audit(
+        msg.sender,
+        token,
+        amount * (10 ** decimals),
+        duration,
+        cliff,
+        0,
+        0,
+        0,
+        false
+      );
+
+      uint256[] memory auditorArr = new uint256[](auditors.length);
+
+      for (uint256 i = 0; i < auditors.length; i++) {
+        // we'll assume identical payout per auditor.
+        address auditor = auditors[i];
+        uint256 vestingScheduleId = computeNextVestingScheduleIdForHolder(auditor);
+        uint256 currentVestingCount = holdersVestingCount[auditor];
+        holdersVestingCount[auditor] = currentVestingCount + 1;
+        vestingSchedulesIds.push(vestingScheduleId);
+        
+        auditorArr[i] = vestingScheduleId;
+
+        vestingSchedules[vestingScheduleId] = VestingSchedule(
+          auditor,
+          amount * (10 ** decimals) / auditors.length,
           0,
-          0,
-          false
+          auditId
         );
+      }
 
-        uint256[] memory auditorArr = new uint256[](auditors.length);
+      auditToVesting[auditId] = auditorArr;
 
-        for (uint256 i = 0; i < auditors.length; i++) {
-          // we'll assume identical payout per auditor.
-          address auditor = auditors[i];
-          uint256 vestingScheduleId = computeNextVestingScheduleIdForHolder(auditor);
-          uint256 currentVestingCount = holdersVestingCount[auditor];
-          holdersVestingCount[auditor] = currentVestingCount + 1;
-          vestingSchedulesIds.push(vestingScheduleId);
-          
-          auditorArr[i] = vestingScheduleId;
-
-          vestingSchedules[vestingScheduleId] = VestingSchedule(
-            auditor,
-            amount * (10 ** decimals) / auditors.length,
-            0,
-            auditId
-          );
-        }
-
-        auditToVesting[auditId] = auditorArr;
-
-        emit AuditCreated(auditId);
+      emit AuditCreated(auditId);
     }
 
     /**
@@ -192,26 +194,26 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return The keccak256 hash of the concatenated vesting data.
      */
     function generateAuditId(
-        address auditee,
-        address[] memory auditors,
-        uint256 cliff,
-        uint256 duration,
-        string  memory details,
-        uint256 amount,
-        ERC20 token,
-        string memory salt
+      address auditee,
+      address[] memory auditors,
+      uint256 cliff,
+      uint256 duration,
+      string  memory details,
+      uint256 amount,
+      ERC20 token,
+      string memory salt
     ) public view returns (uint256) {
-        uint256 decimals = ERC20(token).decimals();
-        return uint256(keccak256(abi.encodePacked(
-            auditee,
-            auditors,
-            cliff,
-            duration,
-            details,
-            amount * (10 ** decimals),
-            token,
-            salt
-        )));
+      uint256 decimals = ERC20(token).decimals();
+      return uint256(keccak256(abi.encodePacked(
+        auditee,
+        auditors,
+        cliff,
+        duration,
+        details,
+        amount * (10 ** decimals),
+        token,
+        salt
+      )));
     }
 
     /**
@@ -225,11 +227,11 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     ) public pure returns (uint256) {
         bytes memory findingsData = "";
         for (uint i = 0; i < findings.length; i++) {
-            findingsData = abi.encodePacked(findingsData, findings[i]);
+          findingsData = abi.encodePacked(findingsData, findings[i]);
         }
         return uint256(keccak256(abi.encodePacked(
-            auditId,
-            findingsData
+          auditId,
+          findingsData
         )));
     }
 
@@ -239,111 +241,140 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param auditId auditId of interest to post findings to
      */
     function revealFindings(string[] memory findings, uint256 auditId) public {
-        // removed passing auditors[] as a parameter. spoofing this is expensive, and we already have information
-        // about which auditors belong to each audit, which is verifiable through the auditId generation.
-        // further, it's not even used to generate the tokenId.
+      // removed passing auditors[] as a parameter. spoofing this is expensive, and we already have information
+      // about which auditors belong to each audit, which is verifiable through the auditId generation.
+      // further, it's not even used to generate the tokenId.
 
-        Audit storage targetAudit = audits[auditId];
-        uint256[] storage schedules = auditToVesting[auditId];
+      Audit storage targetAudit = audits[auditId];
+      uint256[] storage schedules = auditToVesting[auditId];
 
-        require(targetAudit.protocolOwner == msg.sender, "Only the auditee can mint this NFT");
-        require(schedules.length == findings.length, "incorrect number of auditors passed");
-        require(!targetAudit.isActive, "audit schedule is already active");
+      require(targetAudit.protocolOwner == msg.sender, "Only the auditee can mint this NFT");
+      require(schedules.length == findings.length, "incorrect number of auditors passed");
+      require(!targetAudit.isActive, "audit schedule is already active");
 
-        targetAudit.token.transferFrom(msg.sender, address(this), targetAudit.amount);
+      targetAudit.token.transferFrom(msg.sender, address(this), targetAudit.amount);
 
-        require(
-            targetAudit.token.balanceOf(address(this)) >= targetAudit.amount,
-            "TokenVesting: cannot create vesting schedule because insufficient tokens"
-        );
-        
-        targetAudit.isActive = true;
-        targetAudit.start = block.timestamp;
+      require(
+        targetAudit.token.balanceOf(address(this)) >= targetAudit.amount,
+        "TokenVesting: cannot create vesting schedule because insufficient tokens"
+      );
+      
+      targetAudit.isActive = true;
+      targetAudit.start = block.timestamp;
 
-        for (uint256 i = 0; i < findings.length; i++) {
-            string memory finding = findings[i];
-            require(bytes(finding).length > 0, "cannot provide an empty finding");
-        }
+      for (uint256 i = 0; i < findings.length; i++) {
+        string memory finding = findings[i];
+        require(bytes(finding).length > 0, "cannot provide an empty finding");
+      }
 
-        // can easily be recreated starting from a source Audit struct.
-        uint256 tokenId = generateTokenId(auditId, findings);
+      // can easily be recreated starting from a source Audit struct.
+      uint256 tokenId = generateTokenId(auditId, findings);
 
-        IAudit(nft).mint(msg.sender, tokenId);
+      IAudit(nft).mint(msg.sender, tokenId);
+
+      targetAudit.nftTokenId = tokenId;
     }
 
     /**
-     * @notice Invalidates an audit and returns payment from all child vesting schedules
+     * @notice Proposes an Invalidation. Can only be performed by Protocol Owner, and only done once.
      * @param auditId the audit identifier
      */
-    function returnFundsAfterAuditInvalidation(uint256 auditId) public {
-        Audit storage targetAudit = audits[auditId];
-        uint256[] storage targetSchedules = auditToVesting[auditId];
+    function proposeInvalidation(uint256 auditId, string memory calldata1) public {
+      Audit storage targetAudit = audits[auditId];
 
-        require(IDAOProxy(dao).isVestingInvalidated(targetAudit.invalidatingProposalId), "Cannot invalidate vesting schedule if proposal is not passed");
+      require(targetAudit.isActive, "Cannot cancel vesting since it hasn't started yet");
+      require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
+      require(msg.sender == targetAudit.protocolOwner, "Only the Protocol Owner can propose an invalidation");
 
-        // payout whatever remains from the vested funds to the auditor
-        // as the difference between audit price and total withdrawn funds by auditors.
-        uint256 totalWithdrawn = 0;
-        uint256 totalAmount = 0;
-        for (uint256 i = 0; i < targetSchedules.length; i++) {
-          VestingSchedule storage schedule = vestingSchedules[targetSchedules[i]];
-          totalWithdrawn = totalWithdrawn + schedule.withdrawn;
-          totalAmount = totalAmount + schedule.amount;
-        }
-        
-        // AND then the DAO + voters... TBD.
-        targetAudit.token.transfer(targetAudit.protocolOwner, totalAmount - totalWithdrawn);
+      // Your DAO proposal creation logic might look like this: TODO:
+      // Replace the following lines with your actual DAO proposal
+      // creation code
+      address[] memory targets = new address[](1); 
+      uint256[] memory values = new uint256[](1);
+      bytes[] memory calldatas = new bytes[](1);
+
+      targets[0] = address(this);
+      values[0] = 0;
+      calldatas[0] = bytes(calldata1);
+
+      // Assuming 'dao' is your DAO contract
+      targetAudit.invalidatingProposalId = IDAOProxy(dao).propose(
+        targets,
+        values,
+        calldatas,
+        "Proposal to cancel vesting for audit"
+      );
     }
 
-    function proposeCancelVesting(uint256 auditId, string memory calldata1) public {
-        Audit storage targetAudit = audits[auditId];
+    /**
+     * @notice Cancels a proposal. We'll constrain to the deployer address for now.
+     * Puts struct in a state where a new proposal cannot be made, and we mark it as non-frozen
+     * @param auditId the audit identifier
+     */
+    function cancelProposal(uint256 auditId) public onlyOwner {
+      Audit storage targetAudit = audits[auditId];
 
-        require(targetAudit.isActive, "Cannot cancel vesting since it hasn't started yet");
-        require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
-        require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
+      // this condition catches both empty proposalID, and frozen state for existing proposalID
+      require(
+        IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId),
+        "Proposal is not in state where it can be cancelled"
+      );
+      require(
+        !IDAOProxy(dao).isVestingInvalidated(targetAudit.invalidatingProposalId),
+        "Proposal was already invalidated"
+      );
 
-        // Your DAO proposal creation logic might look like this: TODO:
-        // Replace the following lines with your actual DAO proposal
-        // creation code
-        address[] memory targets = new address[](1); 
-        uint256[] memory values = new uint256[](1);
-        bytes[] memory calldatas = new bytes[](1);
-
-        targets[0] = address(this); 
-        values[0] = 0;
-        calldatas[0] = bytes(calldata1);
-
-        // Assuming 'dao' is your DAO contract
-        targetAudit.invalidatingProposalId = IDAOProxy(dao).propose(targets, values, calldatas, "Proposal to cancel vesting for audit");
+      IDAOProxy(dao).setProposalFrozen(targetAudit.invalidatingProposalId, false);
     }
 
-    // TODO: Figure out a way to have this set automatically when a proposal is created
-    // seems redudant with function above, as both set the invalidatingProposalID
-    function setInvalidatingProposalId(uint256 auditId, uint256 invalidatingProposalId) external {
-        Audit storage targetAudit = audits[auditId];
+    /**
+     * @notice Carries out an invalidation. Funds are returned to Protocol Owner. NFT is burned.
+     * We'll constrain to the deployer address for now.
+     * @param auditId the audit identifier
+     */
+    function invalidate(uint256 auditId) public onlyOwner {
+      Audit storage targetAudit = audits[auditId];
+      uint256[] storage targetSchedules = auditToVesting[auditId];
 
-        
-        require(targetAudit.isActive, "Cannot invalidate since it hasn't started yet");
-        require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
-        // This require statement doesn't make sense, or maybe the message just doesn't make sense... does it?
-        require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
+      // under the hood will revert if withdraw is frozen.
+      IDAOProxy(dao).setProposalInvalidated(targetAudit.invalidatingProposalId, true);
 
-        targetAudit.invalidatingProposalId = invalidatingProposalId;
+      // payout whatever remains from the vested funds to the auditor
+      // as the difference between audit price and total withdrawn funds by auditors.
+      uint256 totalWithdrawn = 0;
+      uint256 totalAmount = 0;
+      for (uint256 i = 0; i < targetSchedules.length; i++) {
+        VestingSchedule storage schedule = vestingSchedules[targetSchedules[i]];
+        totalWithdrawn = totalWithdrawn + schedule.withdrawn;
+        totalAmount = totalAmount + schedule.amount;
+      }
+      
+      // AND then the DAO + voters... TBD.
+      targetAudit.token.transfer(targetAudit.protocolOwner, totalAmount - totalWithdrawn);
+
+      // burn the NFT representation of an Audit
+      IAudit(nft).burn(targetAudit.nftTokenId);
+
+
+      // Resetting nftTokenId destroys the reference to the burned NFT
+      targetAudit.nftTokenId = 0;
+
+      // don't need to reset the invalidatingProposalId or isActive (unless we want to?)
     }
 
     /**
       * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
       */
     function isWithdrawPaused(uint256 auditId) public view returns (bool) {
-        Audit storage targetAudit = audits[auditId];
+      Audit storage targetAudit = audits[auditId];
 
-        if (!targetAudit.isActive) {
-          // don't even look in the DAO, as entry won't exist. Just return immediately.
-          // Captures the case for auditID that doesn't exist, or auditID where isActive is false.
-          return false;
-        }
+      if (!targetAudit.isActive) {
+        // don't even look in the DAO, as entry won't exist. Just return immediately.
+        // Captures the case for auditID that doesn't exist, or auditID where isActive is false.
+        return false;
+      }
 
-        return IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
+      return IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
     }
 
     /**
@@ -351,24 +382,24 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param vestingScheduleId the vesting schedule identifier
      */
     function withdraw(uint256 vestingScheduleId) public nonReentrant {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        Audit storage parentAudit = audits[vestingSchedule.auditId];
+      VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+      Audit storage parentAudit = audits[vestingSchedule.auditId];
 
-        bool isAuditor = msg.sender == vestingSchedule.auditor;
-        bool isReleasor = (msg.sender == owner());
+      bool isAuditor = msg.sender == vestingSchedule.auditor;
+      bool isReleasor = (msg.sender == owner());
 
-        require(
-            isAuditor || isReleasor,
-            "TokenVesting: only auditor and owner can release vested tokens"
-        );
+      require(
+        isAuditor || isReleasor,
+        "TokenVesting: only auditor and owner can release vested tokens"
+      );
 
-        // COME BACK TO THIS.
-        require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
-       
-        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        vestingSchedule.withdrawn += vestedAmount;
+      // COME BACK TO THIS.
+      require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+      
+      uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+      vestingSchedule.withdrawn += vestedAmount;
 
-        parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+      parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
     }
 
     /**
@@ -388,10 +419,10 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return vestingId vesting id
      */
     function getVestingIdAtIndex(
-        uint256 index
+      uint256 index
     ) external view returns (uint256) {
-        require(index < getVestingSchedulesCount(), "TokenVesting: index out of bounds");
-        return vestingSchedulesIds[index];
+      require(index < getVestingSchedulesCount(), "TokenVesting: index out of bounds");
+      return vestingSchedulesIds[index];
     }
 
     /**
@@ -401,13 +432,13 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return vestingSchedule the vesting schedule structure information
      */
     function getVestingScheduleByAddressAndIndex(
-        address auditor,
-        uint256 index
+      address auditor,
+      uint256 index
     ) external view returns (VestingSchedule memory) {
-        return
-            getVestingSchedule(
-                computeVestingScheduleIdForAddressAndIndex(auditor, index)
-            );
+      return
+        getVestingSchedule(
+          computeVestingScheduleIdForAddressAndIndex(auditor, index)
+        );
     }
 
     function getVestingScheduleIdByAddressAndAudit(address auditor, uint256 auditId) public view returns (uint256) {
@@ -426,7 +457,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return total the total number of vesting schedules
      */
     function getVestingSchedulesCount() public view returns (uint256) {
-        return vestingSchedulesIds.length;
+      return vestingSchedulesIds.length;
     }
 
     /**
@@ -435,8 +466,8 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return amount the vested amount since last withdrawal
      */
     function computeReleasableAmount(uint256 vestingScheduleId) public view returns (uint256) {
-        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-        return _computeReleasableAmount(vestingSchedule);
+      VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+      return _computeReleasableAmount(vestingSchedule);
     }
 
     /**
@@ -444,7 +475,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return the vesting schedule structure information
      */
     function getVestingSchedule(uint256 vestingScheduleId) public view returns (VestingSchedule memory) {
-        return vestingSchedules[vestingScheduleId];
+      return vestingSchedules[vestingScheduleId];
     }
 
 
@@ -460,32 +491,32 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @dev Computes the next vesting schedule identifier for a given holder address.
      */
     function computeNextVestingScheduleIdForHolder(address holder) public view returns (uint256) {
-        return computeVestingScheduleIdForAddressAndIndex(
-          holder,
-          holdersVestingCount[holder]
-        );
+      return computeVestingScheduleIdForAddressAndIndex(
+        holder,
+        holdersVestingCount[holder]
+      );
     }
 
     /**
      * @dev Returns the last vesting schedule for a given holder address.
      */
     function getLastVestingScheduleForHolder(address holder) external view returns (VestingSchedule memory) {
-        return vestingSchedules[
-          computeVestingScheduleIdForAddressAndIndex(
-            holder,
-            holdersVestingCount[holder] - 1
-          )
-        ];
+      return vestingSchedules[
+        computeVestingScheduleIdForAddressAndIndex(
+          holder,
+          holdersVestingCount[holder] - 1
+        )
+      ];
     }
 
     /**
      * @dev Computes the vesting schedule identifier for an address and an index.
      */
     function computeVestingScheduleIdForAddressAndIndex(
-        address holder,
-        uint256 index
+      address holder,
+      uint256 index
     ) public pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(holder, index)));
+      return uint256(keccak256(abi.encodePacked(holder, index)));
     }
 
     /**
@@ -493,42 +524,39 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @return the amount of releasable tokens
      */
     function _computeReleasableAmount(
-        VestingSchedule memory vestingSchedule
+      VestingSchedule memory vestingSchedule
     ) internal view returns (uint256) {
-        // Parent audit retains baseline audit terms.
-        Audit storage parentAudit = audits[vestingSchedule.auditId];
+      // Parent audit retains baseline audit terms.
+      Audit storage parentAudit = audits[vestingSchedule.auditId];
 
-        if (!parentAudit.isActive) {
-          // captures inactive audits, or audits that don't exist.
-          return 0;
-        }
+      if (!parentAudit.isActive) {
+        // captures inactive audits, or audits that don't exist.
+        return 0;
+      }
 
-        uint256 currentTime = block.timestamp;
-        // If the current time is before the cliff, no tokens are releasable.
-        if (currentTime < parentAudit.cliff + parentAudit.start) {
-          return 0;
-        }
-        // If the current time is after the vesting period, all tokens are releasable,
-        // minus the amount already released.
-        else if (currentTime >= parentAudit.start + parentAudit.duration) {
-          return vestingSchedule.amount - vestingSchedule.withdrawn;
-        }
-        // Otherwise, some tokens are releasable.
-        else {
-          uint256 m = vestingSchedule.amount / parentAudit.duration;
-          uint256 x = currentTime - parentAudit.start;
-          uint256 y = m * x;
-          // Subtract the amount already released and return.
-          uint256 releasable = y - vestingSchedule.withdrawn;
-          return releasable;
-        }
-    }
+      if (isWithdrawPaused(vestingSchedule.auditId)) {
+        // captures those that are frozen.
+        return 0;
+      }
 
-    /**
-     * @dev Returns the current time.
-     * @return the current timestamp in seconds. (Switch to internal when deploying)
-     */
-    function getCurrentTime() internal view virtual returns (uint256) {
-        return block.timestamp;
+      uint256 currentTime = block.timestamp;
+      // If the current time is before the cliff, no tokens are releasable.
+      if (currentTime < parentAudit.cliff + parentAudit.start) {
+        return 0;
+      }
+      // If the current time is after the vesting period, all tokens are releasable,
+      // minus the amount already released.
+      else if (currentTime >= parentAudit.start + parentAudit.duration) {
+        return vestingSchedule.amount - vestingSchedule.withdrawn;
+      }
+      // Otherwise, some tokens are releasable.
+      else {
+        uint256 m = vestingSchedule.amount / parentAudit.duration;
+        uint256 x = currentTime - parentAudit.start;
+        uint256 y = m * x;
+        // Subtract the amount already released and return.
+        uint256 releasable = y - vestingSchedule.withdrawn;
+        return releasable;
+      }
     }
 }

@@ -43,6 +43,10 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         super._burn(tokenId);
     }
 
+    function burn(uint256 tokenId) public onlyOwner {
+        _burn(tokenId);
+    }
+
     function supportsInterface(bytes4 interfaceId)
         public
         view
