@@ -16,7 +16,7 @@ describe("DAOProxy Functionality", function () {
   let addrs: any;
 
   before(async function () {
-    DAOProxy = await ethers.getContractFactory("DAOProxy");
+    DAOProxy = await ethers.getContractFactory("DAOProxyManual");
   });
 
   beforeEach(async function () {

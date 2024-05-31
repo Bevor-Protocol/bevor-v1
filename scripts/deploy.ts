@@ -7,7 +7,7 @@ async function main() {
 
   const Token = await ethers.getContractFactory("ERC20Token");
   const TL = await ethers.getContractFactory("BevorTimelockController");
-  const DAOProxy = await ethers.getContractFactory("DAOProxy");
+  const DAOProxy = await ethers.getContractFactory("DAOProxyManual");
   const Audit = await ethers.getContractFactory("Audit");
   const BevorProtocol = await ethers.getContractFactory("BevorProtocol");
 
