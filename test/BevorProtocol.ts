@@ -27,7 +27,7 @@ describe("Bevor Protocol Functionality", function () {
   before(async function () {
     Token = await ethers.getContractFactory("ERC20Token");
     TL = await ethers.getContractFactory("BevorTimelockController");
-    DAO = await ethers.getContractFactory("DAOProxy");
+    DAO = await ethers.getContractFactory("DAOProxyManual");
     Audit = await ethers.getContractFactory("Audit");
     BevorProtocol = await ethers.getContractFactory("BevorProtocol");
   });
