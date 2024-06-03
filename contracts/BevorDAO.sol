@@ -102,6 +102,7 @@ contract BevorDAO is IBevorDAO, Governor, GovernorSettings, GovernorCountingSimp
             ,
             ,
             uint256 invalidatingProposalId,
+            ,
             bool isActive
         ) = bevorProtocol.audits(auditId);
 

@@ -114,19 +114,19 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param salt a random string
      */
     function prepareAudit(
-      address[] memory auditors,
-      uint256 cliff,
-      uint256 duration,
-      string  memory details,
-      uint256 amount,
-      ERC20 token,
-      string memory salt
-    ) public {
-      require(bytes(details).length > 0, "details must be provided");
-      require(auditors.length > 0, "at least 1 auditor must be provided");
-      require(duration > 0, "TokenVesting: duration must be > 0");
-      require(amount > 0, "TokenVesting: amount must be > 0");
-      require(duration >= cliff, "TokenVesting: duration must be >= cliff");
+        address[] memory auditors,
+        uint256 cliff,
+        uint256 duration,
+        string  memory details,
+        uint256 amount,
+        ERC20 token,
+        string memory salt
+      ) public {
+        require(bytes(details).length > 0, "details must be provided");
+        require(auditors.length > 0, "at least 1 auditor must be provided");
+        require(duration > 0, "TokenVesting: duration must be > 0");
+        require(amount > 0, "TokenVesting: amount must be > 0");
+        require(duration >= cliff, "TokenVesting: duration must be >= cliff");
 
       uint256 decimals = ERC20(token).decimals();
 
@@ -268,47 +268,10 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       // can easily be recreated starting from a source Audit struct.
       uint256 tokenId = generateTokenId(auditId, findings);
 
-        IAudit(nft).mint(msg.sender, tokenId);
+      IAudit(nft).mint(msg.sender, tokenId);
+
+      targetAudit.nftTokenId = tokenId;
     }
-
-    /**
-     * @notice Invalidates an audit and returns payment from all child vesting schedules
-     * @param auditId the audit identifier
-     */
-    function returnFundsAfterAuditInvalidation(uint256 auditId) public {
-        Audit storage targetAudit = audits[auditId];
-        uint256[] storage targetSchedules = auditToVesting[auditId];
-
-        require(IBevorDAO(dao).isVestingInvalidated(targetAudit.invalidatingProposalId), "Cannot invalidate vesting schedule if proposal is not passed");
-
-        // payout whatever remains from the vested funds to the auditor
-        // as the difference between audit price and total withdrawn funds by auditors.
-        uint256 totalWithdrawn = 0;
-        uint256 totalAmount = 0;
-        for (uint256 i = 0; i < targetSchedules.length; i++) {
-          VestingSchedule storage schedule = vestingSchedules[targetSchedules[i]];
-          totalWithdrawn = totalWithdrawn + schedule.withdrawn;
-          totalAmount = totalAmount + schedule.amount;
-        }
-        
-        // AND then the DAO + voters... TBD.
-        targetAudit.token.transfer(targetAudit.protocolOwner, totalAmount - totalWithdrawn);
-    }
-
-
-    // TODO: Figure out a way to have this set automatically when a proposal is created
-    // seems redudant with function above, as both set the invalidatingProposalID
-    // function setInvalidatingProposalId(uint256 auditId, uint256 invalidatingProposalId) external {
-    //     Audit storage targetAudit = audits[auditId];
-
-        
-    //     require(targetAudit.isActive, "Cannot invalidate since it hasn't started yet");
-    //     require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
-    //     // This require statement doesn't make sense, or maybe the message just doesn't make sense... does it?
-    //     require(msg.sender == targetAudit.protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
-
-    //     targetAudit.invalidatingProposalId = invalidatingProposalId;
-    // }
 
     /**
       * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
@@ -322,7 +285,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         return false;
       }
 
-        return IBevorDAO(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
+      return IBevorDAO(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
     }
 
     /**
