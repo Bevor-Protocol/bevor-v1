@@ -25,9 +25,9 @@ describe("Bevor Protocol Functionality", function () {
   const totalSupplyUnits = ethers.parseUnits(totalSupply.toString(), 18);
 
   before(async function () {
-    Token = await ethers.getContractFactory("ERC20Token");
+    Token = await ethers.getContractFactory("BevorToken");
     TL = await ethers.getContractFactory("BevorTimelockController");
-    DAO = await ethers.getContractFactory("DAOProxy");
+    DAO = await ethers.getContractFactory("ManualDAO");
     Audit = await ethers.getContractFactory("Audit");
     BevorProtocol = await ethers.getContractFactory("BevorProtocol");
   });
@@ -1027,7 +1027,7 @@ describe("Bevor Protocol Functionality", function () {
       expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
 
       // propose an invalidation
-      await bevorProtocol.connect(auditee).proposeInvalidation(auditId, "");
+      await daoProxy.connect(auditee).propose([], [auditId], [], "");
 
       const proposalId = (await bevorProtocol.audits(auditId))[7];
 
@@ -1047,7 +1047,7 @@ describe("Bevor Protocol Functionality", function () {
       expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
       
       // trying to re-propose an invalidation for the same audit should revert.
-      await expect(bevorProtocol.connect(auditee).proposeInvalidation(auditId, ""))
+      await expect(daoProxy.connect(auditee).propose([], [auditId], [], ""))
       .to.be.revertedWith("Cannot set the cancellation proposal more than once");
     });
 
@@ -1115,7 +1115,7 @@ describe("Bevor Protocol Functionality", function () {
       expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
       expect(await testToken.balanceOf(auditee)).to.equal(BigInt(10));
       // propose an invalidation
-      await bevorProtocol.connect(auditee).proposeInvalidation(auditId, "");
+      await daoProxy.connect(auditee).propose([], [auditId], [], "");
 
       await bevorProtocol.invalidate(auditId);
 
