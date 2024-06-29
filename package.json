@@ -1,5 +1,10 @@
 {
   "name": "hardhat-project",
+  "scripts": {
+    "start": "hardhat node",
+    "deploy": "hardhat run scripts/deploy.ts --network localhost",
+    "test": "hardhat test"
+  },
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
