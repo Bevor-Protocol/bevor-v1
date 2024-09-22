@@ -81,6 +81,10 @@ describe("ManualDAO Functionality", function () {
       salt,
     )
 
+    await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
+    const allowance = await testToken.allowance(auditee, bevorProtocolAddress);
+    console.log("Allowance: ", allowance.toString());
+
     await bevorProtocol.connect(auditee).revealFindings(
       findings,
       auditId,
@@ -91,12 +95,10 @@ describe("ManualDAO Functionality", function () {
     const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
 
     await helpers.time.increaseTo(createdAuditStartTime + BigInt(1));
-    expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
 
     // mines a new block that equal to the cliff, should start initial vesting.
     await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 1));
-
-    await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
+    expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
     await daoProxy.connect(auditee).propose([], [auditId], [], `Audit Proposal ${1}: ${auditId}`);
   });
 
