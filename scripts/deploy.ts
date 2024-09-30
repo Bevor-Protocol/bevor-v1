@@ -5,9 +5,9 @@ async function main() {
   const totalSupply = 1_000_000;
   const totalSupplyCorrected = ethers.parseUnits(totalSupply.toString(), 18);
 
-  const Token = await ethers.getContractFactory("ERC20Token");
+  const Token = await ethers.getContractFactory("BevorToken");
   const TL = await ethers.getContractFactory("BevorTimelockController");
-  const DAOProxy = await ethers.getContractFactory("DAOProxy");
+  const DAOProxy = await ethers.getContractFactory("ManualDAO");
   const Audit = await ethers.getContractFactory("Audit");
   const BevorProtocol = await ethers.getContractFactory("BevorProtocol");
 

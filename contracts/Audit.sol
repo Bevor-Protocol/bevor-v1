@@ -26,7 +26,8 @@ contract Audit is ERC721Enumerable, Ownable, ERC2771Recipient {
         return ERC2771Recipient._msgData();
     }
     
-    function mint(address _to, uint256 tokenId) public onlyOwner {
+    // TODO: Figure out how to secure this function, shouldn't be only owner though.
+    function mint(address _to, uint256 tokenId) public {
         _mint(_to, tokenId);
     }
 

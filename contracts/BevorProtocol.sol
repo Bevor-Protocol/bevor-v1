@@ -11,26 +11,13 @@ import "hardhat/console.sol";
 import "./IAudit.sol";
 import "./IBevorDAO.sol";
 import "./BevorDAO.sol";
-import "./DAOProxy.sol";
-import "./IDAOProxy.sol";
+import "./IBevorDAO.sol";
+import "./Types.sol";
 
 /**
  * @title AuditPayment
  */
 contract BevorProtocol is Ownable, ReentrancyGuard {
-    // Let's assume vesting terms are globally set by the Audit itself.
-    struct Audit {
-      address protocolOwner;
-      ERC20 token;
-      uint256 amount;
-      uint256 duration;
-      uint256 cliff;
-      uint256 start;
-      uint256 nftTokenId;
-      uint256 invalidatingProposalId;
-      bool isActive;
-    }
-
     struct VestingSchedule {
       address auditor;
       uint256 amount;
@@ -45,17 +32,6 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     mapping(address => uint256) public holdersVestingCount;
     address public nft;
     address public dao;
-
-    enum ProposalState {
-      Pending,
-      Active,
-      Canceled,
-      Defeated,
-      Succeeded,
-      Queued,
-      Expired,
-      Executed
-    }
 
     event VestingScheduleCreated(
       address indexed ProtocolOwner,
@@ -105,6 +81,29 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     fallback() external payable {}
 
     /**
+     * @dev Sets a new DAO address.
+     * @param newDao The address of the new DAO.
+     */
+    function setDaoAddress(address newDao) external {
+        require(newDao != address(0), "New DAO address cannot be the zero address");
+        dao = newDao;
+    }
+
+    /**
+     * @dev Modifies the invalidating proposal ID in an existing audit.
+     * @param auditId The ID of the audit to modify.
+     * @param invalidatingProposalId The new invalidating proposal ID to set.
+     */
+    function addInvalidatingProposalId(uint256 auditId, uint256 invalidatingProposalId) external onlyDAO {
+        Audit storage targetAudit = audits[auditId];
+
+        require(targetAudit.isActive, "Cannot modify since the audit hasn't started yet");
+        require(targetAudit.invalidatingProposalId == 0, "Cannot modify the invalidating proposal ID more than once");
+
+        targetAudit.invalidatingProposalId = invalidatingProposalId;
+    }
+
+    /**
      * @dev creates the locked version of the audit once all parties agree on terms
      * also creates the vesting schedules. Marks all as inactive.
      * @param auditors an array of auditors to conduct the audit
@@ -114,21 +113,20 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @param token ERC20 token to be used for escrow + payment
      * @param salt a random string
      */
-
     function prepareAudit(
-      address[] memory auditors,
-      uint256 cliff,
-      uint256 duration,
-      string  memory details,
-      uint256 amount,
-      ERC20 token,
-      string memory salt
-    ) public {
-      require(bytes(details).length > 0, "details must be provided");
-      require(auditors.length > 0, "at least 1 auditor must be provided");
-      require(duration > 0, "TokenVesting: duration must be > 0");
-      require(amount > 0, "TokenVesting: amount must be > 0");
-      require(duration >= cliff, "TokenVesting: duration must be >= cliff");
+        address[] memory auditors,
+        uint256 cliff,
+        uint256 duration,
+        string  memory details,
+        uint256 amount,
+        ERC20 token,
+        string memory salt
+      ) public {
+        require(bytes(details).length > 0, "details must be provided");
+        require(auditors.length > 0, "at least 1 auditor must be provided");
+        require(duration > 0, "TokenVesting: duration must be > 0");
+        require(amount > 0, "TokenVesting: amount must be > 0");
+        require(duration >= cliff, "TokenVesting: duration must be >= cliff");
 
       uint256 decimals = ERC20(token).decimals();
 
@@ -276,93 +274,6 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Proposes an Invalidation. Can only be performed by Protocol Owner, and only done once.
-     * @param auditId the audit identifier
-     */
-    function proposeInvalidation(uint256 auditId, string memory calldata1) public {
-      Audit storage targetAudit = audits[auditId];
-
-      require(targetAudit.isActive, "Cannot cancel vesting since it hasn't started yet");
-      require(targetAudit.invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
-      require(msg.sender == targetAudit.protocolOwner, "Only the Protocol Owner can propose an invalidation");
-
-      // Your DAO proposal creation logic might look like this: TODO:
-      // Replace the following lines with your actual DAO proposal
-      // creation code
-      address[] memory targets = new address[](1); 
-      uint256[] memory values = new uint256[](1);
-      bytes[] memory calldatas = new bytes[](1);
-
-      targets[0] = address(this);
-      values[0] = 0;
-      calldatas[0] = bytes(calldata1);
-
-      // Assuming 'dao' is your DAO contract
-      targetAudit.invalidatingProposalId = IDAOProxy(dao).propose(
-        targets,
-        values,
-        calldatas,
-        "Proposal to cancel vesting for audit"
-      );
-    }
-
-    /**
-     * @notice Cancels a proposal. We'll constrain to the deployer address for now.
-     * Puts struct in a state where a new proposal cannot be made, and we mark it as non-frozen
-     * @param auditId the audit identifier
-     */
-    function cancelProposal(uint256 auditId) public onlyOwner {
-      Audit storage targetAudit = audits[auditId];
-
-      // this condition catches both empty proposalID, and frozen state for existing proposalID
-      require(
-        IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId),
-        "Proposal is not in state where it can be cancelled"
-      );
-      require(
-        !IDAOProxy(dao).isVestingInvalidated(targetAudit.invalidatingProposalId),
-        "Proposal was already invalidated"
-      );
-
-      IDAOProxy(dao).setProposalFrozen(targetAudit.invalidatingProposalId, false);
-    }
-
-    /**
-     * @notice Carries out an invalidation. Funds are returned to Protocol Owner. NFT is burned.
-     * We'll constrain to the deployer address for now.
-     * @param auditId the audit identifier
-     */
-    function invalidate(uint256 auditId) public onlyOwner {
-      Audit storage targetAudit = audits[auditId];
-      uint256[] storage targetSchedules = auditToVesting[auditId];
-
-      // under the hood will revert if withdraw is frozen.
-      IDAOProxy(dao).setProposalInvalidated(targetAudit.invalidatingProposalId, true);
-
-      // payout whatever remains from the vested funds to the auditor
-      // as the difference between audit price and total withdrawn funds by auditors.
-      uint256 totalWithdrawn = 0;
-      uint256 totalAmount = 0;
-      for (uint256 i = 0; i < targetSchedules.length; i++) {
-        VestingSchedule storage schedule = vestingSchedules[targetSchedules[i]];
-        totalWithdrawn = totalWithdrawn + schedule.withdrawn;
-        totalAmount = totalAmount + schedule.amount;
-      }
-      
-      // AND then the DAO + voters... TBD.
-      targetAudit.token.transfer(targetAudit.protocolOwner, totalAmount - totalWithdrawn);
-
-      // burn the NFT representation of an Audit
-      IAudit(nft).burn(targetAudit.nftTokenId);
-
-
-      // Resetting nftTokenId destroys the reference to the burned NFT
-      targetAudit.nftTokenId = 0;
-
-      // don't need to reset the invalidatingProposalId or isActive (unless we want to?)
-    }
-
-    /**
       * @dev If vesting proposal exits and is in the voting or execution stages. Otherwise will return false and allow vesting. 
       */
     function isWithdrawPaused(uint256 auditId) public view returns (bool) {
@@ -374,7 +285,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
         return false;
       }
 
-      return IDAOProxy(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
+      return IBevorDAO(dao).isWithdrawFrozen(targetAudit.invalidatingProposalId);
     }
 
     /**
@@ -386,20 +297,33 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       Audit storage parentAudit = audits[vestingSchedule.auditId];
 
       bool isAuditor = msg.sender == vestingSchedule.auditor;
+      bool isProtocolOwner = msg.sender == parentAudit.protocolOwner;
       bool isReleasor = (msg.sender == owner());
 
-      require(
-        isAuditor || isReleasor,
-        "TokenVesting: only auditor and owner can release vested tokens"
-      );
+      bool invalidated = IBevorDAO(dao).isVestingInvalidated(parentAudit.invalidatingProposalId);
+
+      if (isProtocolOwner) {
+        require(invalidated, "TokenVesting: audit must be invalidated for protocol owner to release vested tokens");
+      } else {
+        require(
+          isAuditor || isReleasor,
+          "TokenVesting: only auditor and owner can release vested tokens"
+        );
+      }
 
       // COME BACK TO THIS.
-      require(!IDAOProxy(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
-      
+      if (!invalidated) {
+        require(!IBevorDAO(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+      }
+
       uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
       vestingSchedule.withdrawn += vestedAmount;
 
-      parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+      if (invalidated) {
+        parentAudit.token.transfer(parentAudit.protocolOwner, vestedAmount);
+      } else {
+        parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+      }
     }
 
     /**
