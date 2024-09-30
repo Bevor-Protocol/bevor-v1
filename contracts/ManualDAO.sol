@@ -42,6 +42,15 @@ contract ManualDAO is IBevorDAO, Ownable {
 
         uint256 auditId = values[0];
 
+        // address protocolOwner
+        // ERC20 token
+        // uint256 amount
+        // uint256 duration
+        // uint256 cliff
+        // uint256 start
+        // uint256 nftTokenId
+        // uint256 invalidatingProposalId
+        // bool isActive
         (
             address protocolOwner,
             ,
@@ -49,13 +58,12 @@ contract ManualDAO is IBevorDAO, Ownable {
             ,
             ,
             ,
-            uint256 invalidatingProposalId,
+            ,
             ,
             bool isActive
         ) = bevorProtocol.audits(auditId);
 
         require(isActive, "Cannot cancel vesting since it hasn't started yet");
-        require(invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         require(msg.sender == protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
 
         bevorProtocol.addInvalidatingProposalId(auditId, proposals);

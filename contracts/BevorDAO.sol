@@ -12,25 +12,28 @@ import "./IAudit.sol";
 import "./Types.sol";
 import "./BevorProtocol.sol";
 
-contract BevorDAO is IBevorDAO, Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
+contract BevorDAO is IBevorDAO, Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl, Ownable {
     ProposalState public propState;
 
     // TODO (Blake Hatch) Figure out if these constructor values are good
-    constructor(IVotes _token, TimelockController _timelock, BevorProtocol _protocol)
+    constructor(IVotes _token, TimelockController _timelock)
         Governor("BevorGovernor")
         GovernorSettings(7200 /* 1 day */, 50400 /* 1 week */, 0)
         GovernorVotes(_token)
         GovernorVotesQuorumFraction(4)
         GovernorTimelockControl(_timelock)
     {
-        bevorProtocol = _protocol;
     }
 
     BevorProtocol public bevorProtocol;
 
+    function setBevorProtocol(BevorProtocol _protocol) public onlyOwner {
+        bevorProtocol = _protocol;
+    }
+
     function isWithdrawFrozen(uint256 proposalId) public view returns (bool) {
         ProposalState proposalState = state(proposalId);
-        return proposalState == ProposalState.Pending || proposalState == ProposalState.Active ;
+        return proposalState == ProposalState.Pending || proposalState == ProposalState.Active;
     }
 
     function isVestingInvalidated(uint256 proposalId) public view returns (bool) {
@@ -101,13 +104,12 @@ contract BevorDAO is IBevorDAO, Governor, GovernorSettings, GovernorCountingSimp
             ,
             ,
             ,
-            uint256 invalidatingProposalId,
+            ,
             ,
             bool isActive
         ) = bevorProtocol.audits(auditId);
 
         require(isActive, "Cannot cancel vesting since it hasn't started yet");
-        require(invalidatingProposalId == 0, "Cannot set the cancellation proposal more than once"); 
         require(msg.sender == protocolOwner, "Cannot propose that the audit is invalid if you are not the protocol owner");
 
         // Call the propose function from the Governor base contract

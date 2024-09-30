@@ -297,20 +297,33 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       Audit storage parentAudit = audits[vestingSchedule.auditId];
 
       bool isAuditor = msg.sender == vestingSchedule.auditor;
+      bool isProtocolOwner = msg.sender == parentAudit.protocolOwner;
       bool isReleasor = (msg.sender == owner());
 
-      require(
-        isAuditor || isReleasor,
-        "TokenVesting: only auditor and owner can release vested tokens"
-      );
+      bool invalidated = IBevorDAO(dao).isVestingInvalidated(parentAudit.invalidatingProposalId);
 
-        // COME BACK TO THIS.
+      if (isProtocolOwner) {
+        require(invalidated, "TokenVesting: audit must be invalidated for protocol owner to release vested tokens");
+      } else {
+        require(
+          isAuditor || isReleasor,
+          "TokenVesting: only auditor and owner can release vested tokens"
+        );
+      }
+
+      // COME BACK TO THIS.
+      if (!invalidated) {
         require(!IBevorDAO(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
-       
-        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        vestingSchedule.withdrawn += vestedAmount;
+      }
 
-      parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+      uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+      vestingSchedule.withdrawn += vestedAmount;
+
+      if (invalidated) {
+        parentAudit.token.transfer(parentAudit.protocolOwner, vestedAmount);
+      } else {
+        parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+      }
     }
 
     /**

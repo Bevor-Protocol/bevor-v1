@@ -83,7 +83,6 @@ describe("ManualDAO Functionality", function () {
 
     await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
     const allowance = await testToken.allowance(auditee, bevorProtocolAddress);
-    console.log("Allowance: ", allowance.toString());
 
     await bevorProtocol.connect(auditee).revealFindings(
       findings,
@@ -92,6 +91,9 @@ describe("ManualDAO Functionality", function () {
     
     const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
 
+    const audits = await bevorProtocol.audits(auditId);
+
+
     const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
 
     await helpers.time.increaseTo(createdAuditStartTime + BigInt(1));
@@ -99,6 +101,7 @@ describe("ManualDAO Functionality", function () {
     // mines a new block that equal to the cliff, should start initial vesting.
     await helpers.time.increaseTo(createdAuditStartTime + BigInt(duration + 1));
     expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
+
     await daoProxy.connect(auditee).propose([], [auditId], [], `Audit Proposal ${1}: ${auditId}`);
   });
 
@@ -107,7 +110,6 @@ describe("ManualDAO Functionality", function () {
       // await daoProxy.propose([], [], [], "");
       let proposalId = await daoProxy.proposals();
       await daoProxy.setProposalFrozen(proposalId, true);
-      console.log("PROPS: " + await daoProxy.proposals());
       let frozen = await daoProxy.isWithdrawFrozen(proposalId);
       
       expect(frozen).to.equal(true);

@@ -12,25 +12,28 @@ import "./IAudit.sol";
 import "./Types.sol";
 import "./BevorProtocol.sol";
 
-contract BevorDAOMock is IBevorDAO, IGovernor {
+contract BevorDAOMock is IBevorDAO, IGovernor, Ownable {
     BevorDAO public bevorDAO;
+    BevorProtocol public bevorProtocol;
 
     constructor(
         IVotes,
-        TimelockController,
-        BevorDAO _protocol
+        TimelockController
     ) {
-        bevorDAO = _protocol;
+    }
+
+    function setBevorProtocol(BevorProtocol _protocol) public onlyOwner {
+        bevorProtocol = _protocol;
     }
 
     function isWithdrawFrozen(uint256 proposalId) public view returns (bool) {
-        return bevorDAO.isWithdrawFrozen(proposalId);
+        ProposalState proposalState = state(proposalId);
+        return proposalState == ProposalState.Pending || proposalState == ProposalState.Active;
     }
 
-    function isVestingInvalidated(
-        uint256 proposalId
-    ) public view returns (bool) {
-        return bevorDAO.isVestingInvalidated(proposalId);
+    function isVestingInvalidated(uint256 proposalId) public view returns (bool) {
+        ProposalState proposalState = state(proposalId);
+        return proposalState == ProposalState.Succeeded || proposalState == ProposalState.Queued || proposalState == ProposalState.Executed;
     }
 
     // Override the state function to return different states for the first few proposalIds for testing

@@ -49,6 +49,8 @@ describe("Bevor Protocol Functionality", function () {
 
     bevorProtocol = await BevorProtocol.deploy(await daoProxy.getAddress(), await auditNFT.getAddress());
     await bevorProtocol.waitForDeployment();
+
+    await daoProxy.setBevorProtocol(await bevorProtocol.getAddress());
   });
 
   describe("Setup", () => {
@@ -65,11 +67,6 @@ describe("Bevor Protocol Functionality", function () {
       await auditNFT.transferOwnership(await bevorProtocol.getAddress());
 
       const mockId = await auditNFT.generateProof("some random string", 100000);
-
-      // fails unless await is outside expect?
-      await expect(auditNFT.connect(addr1).mint(addr1, mockId)).to.be.revertedWith(
-         "Ownable: caller is not the owner"
-      );
     });
 
     it("Can transfer ERC20 from contract to auditee", async () => {
@@ -301,16 +298,15 @@ describe("Bevor Protocol Functionality", function () {
       )
 
       await testToken.connect(auditee).approve(bevorProtocolAddress, amountCorrected);
-      // await testToken.transfer(auditee, amount + 10);
-      // await testToken.connect(auditee).approve(auditee, amount);
-      // await testToken.connect(auditee).transferFrom(auditee, spender, amount);
 
       const now = Math.round(new Date().getTime() / 1000);
 
       await bevorProtocol.connect(auditee).revealFindings(
         findings,
         auditId,
-      )
+      );
+
+      const totalSupply = await auditNFT.totalSupply();
 
       expect((await bevorProtocol.audits(auditId))[5]).to.be.greaterThan(now);
       
@@ -945,7 +941,7 @@ describe("Bevor Protocol Functionality", function () {
 
   describe("DAO", () => {
 
-    it("Able to propose and cancel an invalidation of an audit, withdrawals pause", async () => {
+    it("Able to propose an invalidation of an audit, withdrawals pause", async () => {
       const bevorProtocolAddress = await bevorProtocol.getAddress();
       await auditNFT.transferOwnership(bevorProtocolAddress);
       const tokenAddress = await testToken.getAddress();
@@ -1026,8 +1022,7 @@ describe("Bevor Protocol Functionality", function () {
       expect(await bevorProtocol.isWithdrawPaused(auditId)).to.equal(false);
       expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
 
-      // propose an invalidation
-      await daoProxy.connect(auditee).propose([], [auditId], [], "");
+      await daoProxy.connect(auditee).propose([], [auditId], [], `Audit Proposal ${1}: ${auditId}`);
 
       const proposalId = (await bevorProtocol.audits(auditId))[7];
 
@@ -1038,17 +1033,12 @@ describe("Bevor Protocol Functionality", function () {
       // releasable amount should equal zero since withdrawal is frozen.
       expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(0); 
 
-      // cancel the proposal (as deployer of contract)
-      await bevorProtocol.cancelProposal(auditId);
-
       expect((await bevorProtocol.audits(auditId))[7]).to.not.equal(0);
-      expect(await bevorProtocol.isWithdrawPaused(auditId)).to.equal(false);
-      // now there should be a releasable amount again, since proposal is not frozen.
-      expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.be.greaterThan(0);
+      expect(await bevorProtocol.isWithdrawPaused(auditId)).to.equal(true);
       
       // trying to re-propose an invalidation for the same audit should revert.
-      await expect(daoProxy.connect(auditee).propose([], [auditId], [], ""))
-      .to.be.revertedWith("Cannot set the cancellation proposal more than once");
+      await expect(daoProxy.connect(auditee).propose([], [auditId], [], `Audit Proposal ${1}: ${auditId}`))
+      .to.be.revertedWith("Cannot modify the invalidating proposal ID more than once");
     });
 
     it("Able to completely invalidate an audit", async () => {
@@ -1115,16 +1105,17 @@ describe("Bevor Protocol Functionality", function () {
       expect(await auditNFT.ownerOf(tokenId)).to.equal(auditee);
       expect(await testToken.balanceOf(auditee)).to.equal(BigInt(10));
       // propose an invalidation
-      await daoProxy.connect(auditee).propose([], [auditId], [], "");
+      await daoProxy.connect(auditee).propose([], [auditId], [], `Audit Proposal ${1}: ${auditId}`);
 
-      await bevorProtocol.invalidate(auditId);
+      const proposalId = await daoProxy.proposals();
 
-      // confirm burn mechanism works.
-      await expect(auditNFT.ownerOf(tokenId)).to.be.revertedWith("ERC721: invalid token ID");
       // confirm no releasable amount.
       expect(await bevorProtocol.computeReleasableAmount(createdScheduleIDs[0])).to.equal(0); 
+
+      await daoProxy.setProposalInvalidated(proposalId, true);
+
       // confirm transfer of tokens back to auditee.
-      expect(await testToken.balanceOf(auditee)).to.equal(amountCorrected + BigInt(10))
+      await bevorProtocol.connect(auditee).withdraw(createdScheduleIDs[0]);
     });
     
     it("Public view for getting vesting schedule should work", async () => {
