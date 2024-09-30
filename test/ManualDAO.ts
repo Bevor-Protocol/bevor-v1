@@ -91,9 +91,6 @@ describe("ManualDAO Functionality", function () {
     
     const createdAuditStartTime = (await bevorProtocol.audits(auditId))[5];
 
-    const audits = await bevorProtocol.audits(auditId);
-
-
     const createdScheduleIDs = await bevorProtocol.getVestingSchedulesForAudit(auditId);
 
     await helpers.time.increaseTo(createdAuditStartTime + BigInt(1));
