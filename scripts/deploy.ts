@@ -3,33 +3,28 @@ import { ethers } from "hardhat";
 async function main() {
 
   const totalSupply = 1_000_000;
-  const totalSupplyCorrected = ethers.parseUnits(totalSupply.toString(), 18);
+  const totalSupplyUnits = ethers.parseUnits(totalSupply.toString(), 18);
 
   const Token = await ethers.getContractFactory("BevorToken");
-  const TL = await ethers.getContractFactory("BevorTimelockController");
-  const DAOProxy = await ethers.getContractFactory("ManualDAO");
+  const ManualDAO = await ethers.getContractFactory("ManualDAO");
   const Audit = await ethers.getContractFactory("Audit");
   const BevorProtocol = await ethers.getContractFactory("BevorProtocol");
 
-  const testToken = await Token.deploy(totalSupplyCorrected, "Test Token", "TT");
+  const testToken = await Token.deploy(totalSupplyUnits, "Test Token", "TT");
   await testToken.waitForDeployment();
-  
-  const timelock = await TL.deploy(0, [], [], "0x341Ab3097C45588AF509db745cE0823722E5Fb19");
-  await timelock.waitForDeployment();
 
-  //const bevorDAO = await DAO.deploy(testToken.getAddress(), timelock.getAddress());
-  //await bevorDAO.waitForDeployment();
-
-  const daoProxy = await DAOProxy.deploy();
-  await daoProxy.waitForDeployment();
+  const manualDao = await ManualDAO.deploy();
+  await manualDao.waitForDeployment();
 
   const auditNFT = await Audit.deploy();
   await auditNFT.waitForDeployment();
 
-  const bevorProtocol = await BevorProtocol.deploy(daoProxy.getAddress(), auditNFT.getAddress());
+  const bevorProtocol = await BevorProtocol.deploy(manualDao.getAddress(), auditNFT.getAddress());
   await bevorProtocol.waitForDeployment();
 
-  await auditNFT.transferOwnership(await bevorProtocol.getAddress());
+  await manualDao.setBevorProtocol(bevorProtocol.getAddress());
+
+  await auditNFT.transferOwnership(bevorProtocol.getAddress());
 }
 
 // We recommend this pattern to be able to use async/await everywhere
