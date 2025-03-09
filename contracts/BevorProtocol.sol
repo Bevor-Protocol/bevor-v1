@@ -7,17 +7,19 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/governance/IGovernor.sol";
+import {CCIPReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/applications/CCIPReceiver.sol";
 import "hardhat/console.sol";
 import "./IAudit.sol";
 import "./IBevorDAO.sol";
 import "./BevorDAO.sol";
 import "./IBevorDAO.sol";
 import "./Types.sol";
+import "./PaymentNode.sol";
 
 /**
  * @title AuditPayment
  */
-contract BevorProtocol is Ownable, ReentrancyGuard {
+contract BevorProtocol is Ownable, CCIPReceiver, ReentrancyGuard {
     struct VestingSchedule {
       address auditor;
       uint256 amount;
@@ -46,6 +48,232 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       uint256 tokenId
     );
 
+    // Event emitted when a message is received from another chain.
+    event MessageReceived(
+        bytes32 indexed messageId, // The unique ID of the CCIP message.
+        uint64 indexed sourceChainSelector, // The chain selector of the source chain.
+        address sender, // The address of the sender from the source chain.
+        string text, // The text that was received.
+        address token, // The token address that was transferred.
+        uint256 tokenAmount // The token amount that was transferred.
+    );
+
+        /**
+     * @notice Returns the details of the last CCIP received message.
+     * @dev This function retrieves the ID, text, token address, and token amount of the last received CCIP message.
+     * @return messageId The ID of the last received CCIP message.
+     * @return text The text of the last received CCIP message.
+     * @return tokenAddress The address of the token in the last CCIP received message.
+     * @return tokenAmount The amount of the token in the last CCIP received message.
+     */
+    function getLastReceivedMessageDetails()
+        public
+        view
+        returns (
+            bytes32 messageId,
+            string memory text,
+            address tokenAddress,
+            uint256 tokenAmount
+        )
+    {
+        return (
+            s_lastReceivedMessageId,
+            s_lastReceivedText,
+            s_lastReceivedTokenAddress,
+            s_lastReceivedTokenAmount
+        );
+    }
+
+    /**
+     * @notice Retrieves a paginated list of failed messages.
+     * @dev This function returns a subset of failed messages defined by `offset` and `limit` parameters. It ensures that the pagination parameters are within the bounds of the available data set.
+     * @param offset The index of the first failed message to return, enabling pagination by skipping a specified number of messages from the start of the dataset.
+     * @param limit The maximum number of failed messages to return, restricting the size of the returned array.
+     * @return failedMessages An array of `FailedMessage` struct, each containing a `messageId` and an `errorCode` (RESOLVED or FAILED), representing the requested subset of failed messages. The length of the returned array is determined by the `limit` and the total number of failed messages.
+     */
+    function getFailedMessages(
+        uint256 offset,
+        uint256 limit
+    ) external view returns (FailedMessage[] memory) {
+        uint256 length = s_failedMessages.length();
+
+        // Calculate the actual number of items to return (can't exceed total length or requested limit)
+        uint256 returnLength = (offset + limit > length)
+            ? length - offset
+            : limit;
+        FailedMessage[] memory failedMessages = new FailedMessage[](
+            returnLength
+        );
+
+        // Adjust loop to respect pagination (start at offset, end at offset + limit or total length)
+        for (uint256 i = 0; i < returnLength; i++) {
+            (bytes32 messageId, uint256 errorCode) = s_failedMessages.at(
+                offset + i
+            );
+            failedMessages[i] = FailedMessage(messageId, ErrorCode(errorCode));
+        }
+        return failedMessages;
+    }
+
+    /// @notice The entrypoint for the CCIP router to call. This function should
+    /// never revert, all errors should be handled internally in this contract.
+    /// @param any2EvmMessage The message to process.
+    /// @dev Extremely important to ensure only router calls this.
+    function ccipReceiveRevealFindingsMessage(
+        Client.Any2EVMMessage calldata any2EvmMessage
+    )
+        external
+        override
+        onlyRouter
+        onlyAllowlisted(
+            any2EvmMessage.sourceChainSelector,
+            abi.decode(any2EvmMessage.sender, (address))
+        ) // Make sure the source chain and sender are allowlisted
+    {
+        /* solhint-disable no-empty-blocks */
+        try this.processMessage(any2EvmMessage) {
+            // Intentionally empty in this example; no action needed if processMessage succeeds
+        } catch (bytes memory err) {
+            // Could set different error codes based on the caught error. Each could be
+            // handled differently.
+            s_failedMessages.set(
+                any2EvmMessage.messageId,
+                uint256(ErrorCode.FAILED)
+            );
+            s_messageContents[any2EvmMessage.messageId] = any2EvmMessage;
+
+            // Extract findings and auditId from the CCIP message data
+            (string[] memory findings, uint256 auditId) = abi.decode(any2EvmMessage.data, (string[], uint256));
+
+            revealFindings(findings, auditId);
+
+            // Don't revert so CCIP doesn't revert. Emit event instead.
+            // The message can be retried later without having to do manual execution of CCIP.
+            emit MessageFailed(any2EvmMessage.messageId, err);
+            return;
+        }
+    }
+
+    /// @notice Serves as the entry point for this contract to process incoming messages.
+    /// @param any2EvmMessage Received CCIP message.
+    /// @dev Transfers specified token amounts to the owner of this contract. This function
+    /// must be external because of the  try/catch for error handling.
+    /// It uses the `onlySelf`: can only be called from the contract.
+    function processMessage(
+        Client.Any2EVMMessage calldata any2EvmMessage
+    )
+        external
+        onlySelf
+        onlyAllowlisted(
+            any2EvmMessage.sourceChainSelector,
+            abi.decode(any2EvmMessage.sender, (address))
+        ) // Make sure the source chain and sender are allowlisted
+    {
+        // Simulate a revert for testing purposes
+        if (s_simRevert) revert ErrorCase();
+
+        _ccipReceive(any2EvmMessage); // process the message - may revert as well
+    }
+
+    /// @notice Allows the owner to retry a failed message in order to unblock the associated tokens.
+    /// @param messageId The unique identifier of the failed message.
+    /// @param tokenReceiver The address to which the tokens will be sent.
+    /// @dev This function is only callable by the contract owner. It changes the status of the message
+    /// from 'failed' to 'resolved' to prevent reentry and multiple retries of the same message.
+    function retryFailedMessage(
+        bytes32 messageId,
+        address tokenReceiver
+    ) external onlyOwner {
+        // Check if the message has failed; if not, revert the transaction.
+        if (s_failedMessages.get(messageId) != uint256(ErrorCode.FAILED))
+            revert MessageNotFailed(messageId);
+
+        // Set the error code to RESOLVED to disallow reentry and multiple retries of the same failed message.
+        s_failedMessages.set(messageId, uint256(ErrorCode.RESOLVED));
+
+        // Retrieve the content of the failed message.
+        Client.Any2EVMMessage memory message = s_messageContents[messageId];
+
+        // This example expects one token to have been sent, but you can handle multiple tokens.
+        // Transfer the associated tokens to the specified receiver as an escape hatch.
+        IERC20(message.destTokenAmounts[0].token).safeTransfer(
+            tokenReceiver,
+            message.destTokenAmounts[0].amount
+        );
+
+        // Emit an event indicating that the message has been recovered.
+        emit MessageRecovered(messageId);
+    }
+
+    /// @notice Allows the owner to toggle simulation of reversion for testing purposes.
+    /// @param simRevert If `true`, simulates a revert condition; if `false`, disables the simulation.
+    /// @dev This function is only callable by the contract owner.
+    function setSimRevert(bool simRevert) external onlyOwner {
+        s_simRevert = simRevert;
+    }
+
+    function _ccipReceive(
+        Client.Any2EVMMessage memory any2EvmMessage
+    ) internal override {
+        s_lastReceivedMessageId = any2EvmMessage.messageId; // fetch the messageId
+        s_lastReceivedText = abi.decode(any2EvmMessage.data, (string)); // abi-decoding of the sent text
+        // Expect one token to be transferred at once, but you can transfer several tokens.
+        s_lastReceivedTokenAddress = any2EvmMessage.destTokenAmounts[0].token;
+        s_lastReceivedTokenAmount = any2EvmMessage.destTokenAmounts[0].amount;
+        emit MessageReceived(
+            any2EvmMessage.messageId,
+            any2EvmMessage.sourceChainSelector, // fetch the source chain identifier (aka selector)
+            abi.decode(any2EvmMessage.sender, (address)), // abi-decoding of the sender address,
+            abi.decode(any2EvmMessage.data, (string)),
+            any2EvmMessage.destTokenAmounts[0].token,
+            any2EvmMessage.destTokenAmounts[0].amount
+        );
+    }
+
+    /// @notice Construct a CCIP message.
+    /// @dev This function will create an EVM2AnyMessage struct with all the necessary information for programmable tokens transfer.
+    /// @param _receiver The address of the receiver.
+    /// @param _text The string data to be sent.
+    /// @param _token The token to be transferred.
+    /// @param _amount The amount of the token to be transferred.
+    /// @param _feeTokenAddress The address of the token used for fees. Set address(0) for native gas.
+    /// @return Client.EVM2AnyMessage Returns an EVM2AnyMessage struct which contains information for sending a CCIP message.
+    function _buildCCIPMessage(
+        address _receiver,
+        string calldata _text,
+        address _token,
+        uint256 _amount,
+        address _feeTokenAddress
+    ) private pure returns (Client.EVM2AnyMessage memory) {
+        // Set the token amounts
+        Client.EVMTokenAmount[]
+            memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        Client.EVMTokenAmount memory tokenAmount = Client.EVMTokenAmount({
+            token: _token,
+            amount: _amount
+        });
+        tokenAmounts[0] = tokenAmount;
+        // Create an EVM2AnyMessage struct in memory with necessary information for sending a cross-chain message
+        Client.EVM2AnyMessage memory evm2AnyMessage = Client.EVM2AnyMessage({
+            receiver: abi.encode(_receiver), // ABI-encoded receiver address
+            data: abi.encode(_text), // ABI-encoded string
+            tokenAmounts: tokenAmounts, // The amount and type of token being transferred
+            extraArgs: Client._argsToBytes(
+                // Additional arguments, setting gas limit and allowing out-of-order execution.
+                // Best Practice: For simplicity, the values are hardcoded. It is advisable to use a more dynamic approach
+                // where you set the extra arguments off-chain. This allows adaptation depending on the lanes, messages,
+                // and ensures compatibility with future CCIP upgrades. Read more about it here: https://docs.chain.link/ccip/best-practices#using-extraargs
+                Client.EVMExtraArgsV2({
+                    gasLimit: 400_000, // Gas limit for the callback on the destination chain
+                    allowOutOfOrderExecution: true // Allows the message to be executed out of order relative to other messages from the same sender
+                })
+            ),
+            // Set the feeToken to a feeTokenAddress, indicating specific asset will be used for fees
+            feeToken: _feeTokenAddress
+        });
+        return evm2AnyMessage;
+    }
+
     /**
      * @dev Emitted when an audit is created with a unique identifier.
      * @param auditId The unique identifier for the audit.
@@ -56,12 +284,13 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @dev Creates a vesting contract.
      * @param dao_ address of the Bevor DAO that controls
      */
-    constructor(address dao_, address nft_) {
+    constructor(address dao_, address nft_, address paymentNode_) {
       // Check that the token address is not 0x0.
       require(address(dao_) != address(0x0));
       require(address(nft_) != address(0x0));
+      require(address(paymentNode_) != address(0x0));
       dao = dao_;
-      nft = nft_;
+      paymentNode = paymentNode_;
     }
 
     modifier onlyDAO() {
@@ -292,7 +521,7 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
      * @notice Release vested amount of tokens.
      * @param vestingScheduleId the vesting schedule identifier
      */
-    function withdraw(uint256 vestingScheduleId) public nonReentrant {
+    function withdraw(uint256 vestingScheduleId, uint256 chainId = 0) public nonReentrant {
       VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
       Audit storage parentAudit = audits[vestingSchedule.auditId];
 
@@ -319,10 +548,29 @@ contract BevorProtocol is Ownable, ReentrancyGuard {
       uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
       vestingSchedule.withdrawn += vestedAmount;
 
-      if (invalidated) {
-        parentAudit.token.transfer(parentAudit.protocolOwner, vestedAmount);
+      // Maybe separate this into a separate helper function.
+      if (chainId == 0) {
+        if (invalidated) {
+          parentAudit.token.transfer(parentAudit.protocolOwner, vestedAmount);
+        } else {
+          parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+        }
       } else {
-        parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+        if (invalidated) {
+          PaymentNode(paymentNode).transferTokensPayLINK(
+            chainId,
+            vestingSchedule.protocolOwner,
+            address(parentAudit.token),
+            vestedAmount
+          );
+        } else {
+          PaymentNode(paymentNode).transferTokensPayLINK(
+            chainId,
+            vestingSchedule.auditor,
+            address(parentAudit.token),
+            vestedAmount
+          );
+        }
       }
     }
 
