@@ -12,12 +12,10 @@ import "hardhat/console.sol";
 import "./IAudit.sol";
 import "./IBevorDAO.sol";
 import "./BevorDAO.sol";
-import "./IBevorDAO.sol";
 import "./Types.sol";
-import "./PaymentNode.sol";
-
+import {BevorPaymentNode as PaymentNode} from "./PaymentNode.sol";
 /**
- * @title AuditPayment
+ * @title BevorProtocol
  */
 contract BevorProtocol is Ownable, CCIPReceiver, ReentrancyGuard {
     struct VestingSchedule {
@@ -84,36 +82,36 @@ contract BevorProtocol is Ownable, CCIPReceiver, ReentrancyGuard {
         );
     }
 
-    /**
-     * @notice Retrieves a paginated list of failed messages.
-     * @dev This function returns a subset of failed messages defined by `offset` and `limit` parameters. It ensures that the pagination parameters are within the bounds of the available data set.
-     * @param offset The index of the first failed message to return, enabling pagination by skipping a specified number of messages from the start of the dataset.
-     * @param limit The maximum number of failed messages to return, restricting the size of the returned array.
-     * @return failedMessages An array of `FailedMessage` struct, each containing a `messageId` and an `errorCode` (RESOLVED or FAILED), representing the requested subset of failed messages. The length of the returned array is determined by the `limit` and the total number of failed messages.
-     */
-    function getFailedMessages(
-        uint256 offset,
-        uint256 limit
-    ) external view returns (FailedMessage[] memory) {
-        uint256 length = s_failedMessages.length();
+    // /**
+    //  * @notice Retrieves a paginated list of failed messages.
+    //  * @dev This function returns a subset of failed messages defined by `offset` and `limit` parameters. It ensures that the pagination parameters are within the bounds of the available data set.
+    //  * @param offset The index of the first failed message to return, enabling pagination by skipping a specified number of messages from the start of the dataset.
+    //  * @param limit The maximum number of failed messages to return, restricting the size of the returned array.
+    //  * @return failedMessages An array of `FailedMessage` struct, each containing a `messageId` and an `errorCode` (RESOLVED or FAILED), representing the requested subset of failed messages. The length of the returned array is determined by the `limit` and the total number of failed messages.
+    //  */
+    // function getFailedMessages(
+    //     uint256 offset,
+    //     uint256 limit
+    // ) external view returns (FailedMessage[] memory) {
+    //     uint256 length = s_failedMessages.length();
 
-        // Calculate the actual number of items to return (can't exceed total length or requested limit)
-        uint256 returnLength = (offset + limit > length)
-            ? length - offset
-            : limit;
-        FailedMessage[] memory failedMessages = new FailedMessage[](
-            returnLength
-        );
+    //     // Calculate the actual number of items to return (can't exceed total length or requested limit)
+    //     uint256 returnLength = (offset + limit > length)
+    //         ? length - offset
+    //         : limit;
+    //     FailedMessage[] memory failedMessages = new FailedMessage[](
+    //         returnLength
+    //     );
 
-        // Adjust loop to respect pagination (start at offset, end at offset + limit or total length)
-        for (uint256 i = 0; i < returnLength; i++) {
-            (bytes32 messageId, uint256 errorCode) = s_failedMessages.at(
-                offset + i
-            );
-            failedMessages[i] = FailedMessage(messageId, ErrorCode(errorCode));
-        }
-        return failedMessages;
-    }
+    //     // Adjust loop to respect pagination (start at offset, end at offset + limit or total length)
+    //     for (uint256 i = 0; i < returnLength; i++) {
+    //         (bytes32 messageId, uint256 errorCode) = s_failedMessages.at(
+    //             offset + i
+    //         );
+    //         failedMessages[i] = FailedMessage(messageId, ErrorCode(errorCode));
+    //     }
+    //     return failedMessages;
+    // }
 
     /// @notice The entrypoint for the CCIP router to call. This function should
     /// never revert, all errors should be handled internally in this contract.
@@ -521,57 +519,63 @@ contract BevorProtocol is Ownable, CCIPReceiver, ReentrancyGuard {
      * @notice Release vested amount of tokens.
      * @param vestingScheduleId the vesting schedule identifier
      */
-    function withdraw(uint256 vestingScheduleId, uint256 chainId = 0) public nonReentrant {
-      VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
-      Audit storage parentAudit = audits[vestingSchedule.auditId];
+    function withdraw(uint256 vestingScheduleId) public nonReentrant {
+        _withdraw(vestingScheduleId, 0);
+    }
 
-      bool isAuditor = msg.sender == vestingSchedule.auditor;
-      bool isProtocolOwner = msg.sender == parentAudit.protocolOwner;
-      bool isReleasor = (msg.sender == owner());
+    /**
+     * @notice Release vested amount of tokens and optionally transfer to another chain.
+     * @param vestingScheduleId the vesting schedule identifier
+     * @param chainId the destination chain ID (0 for same chain)
+     */
+    function withdraw(uint256 vestingScheduleId, uint256 chainId) public nonReentrant {
+        require(chainId != 0, "Use withdraw() for same chain transfers");
+        _withdraw(vestingScheduleId, chainId);
+    }
 
-      bool invalidated = IBevorDAO(dao).isVestingInvalidated(parentAudit.invalidatingProposalId);
+    /**
+     * @notice Internal function to handle token withdrawals
+     * @param vestingScheduleId the vesting schedule identifier
+     * @param chainId the destination chain ID (0 for same chain)
+     */
+    function _withdraw(uint256 vestingScheduleId, uint256 chainId) internal {
+        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+        Audit storage parentAudit = audits[vestingSchedule.auditId];
 
-      if (isProtocolOwner) {
-        require(invalidated, "TokenVesting: audit must be invalidated for protocol owner to release vested tokens");
-      } else {
-        require(
-          isAuditor || isReleasor,
-          "TokenVesting: only auditor and owner can release vested tokens"
-        );
-      }
+        bool isAuditor = msg.sender == vestingSchedule.auditor;
+        bool isProtocolOwner = msg.sender == parentAudit.protocolOwner;
+        bool isReleasor = (msg.sender == owner());
 
-      // COME BACK TO THIS.
-      if (!invalidated) {
-        require(!IBevorDAO(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
-      }
+        bool invalidated = IBevorDAO(dao).isVestingInvalidated(parentAudit.invalidatingProposalId);
 
-      uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-      vestingSchedule.withdrawn += vestedAmount;
-
-      // Maybe separate this into a separate helper function.
-      if (chainId == 0) {
-        if (invalidated) {
-          parentAudit.token.transfer(parentAudit.protocolOwner, vestedAmount);
+        if (isProtocolOwner) {
+            require(invalidated, "TokenVesting: audit must be invalidated for protocol owner to release vested tokens");
         } else {
-          parentAudit.token.transfer(vestingSchedule.auditor, vestedAmount);
+            require(
+                isAuditor || isReleasor,
+                "TokenVesting: only auditor and owner can release vested tokens"
+            );
         }
-      } else {
-        if (invalidated) {
-          PaymentNode(paymentNode).transferTokensPayLINK(
-            chainId,
-            vestingSchedule.protocolOwner,
-            address(parentAudit.token),
-            vestedAmount
-          );
+
+        if (!invalidated) {
+            require(!IBevorDAO(dao).isWithdrawFrozen(parentAudit.invalidatingProposalId), "Withdrawing is paused due to pending proposal cannot withdraw tokens");
+        }
+
+        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+        vestingSchedule.withdrawn += vestedAmount;
+
+        address recipient = invalidated ? parentAudit.protocolOwner : vestingSchedule.auditor;
+
+        if (chainId == 0) {
+            parentAudit.token.transfer(recipient, vestedAmount);
         } else {
-          PaymentNode(paymentNode).transferTokensPayLINK(
-            chainId,
-            vestingSchedule.auditor,
-            address(parentAudit.token),
-            vestedAmount
-          );
+            PaymentNode(paymentNode).transferTokensPayLINK(
+                chainId,
+                recipient,
+                address(parentAudit.token),
+                vestedAmount
+            );
         }
-      }
     }
 
     /**
